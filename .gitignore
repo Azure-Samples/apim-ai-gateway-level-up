@@ -1,0 +1,30 @@
+# Azure / azd
+.azure/
+*.azd/
+
+# Environment & secrets
+.env
+.env.*
+*.local
+local.settings.json
+*.pem
+*.key
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+
+# Bicep build output
+*.json.bicep.out
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
