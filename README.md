@@ -29,7 +29,34 @@ When teams start using Large Language Models (LLMs) like those in Azure OpenAI, 
                               +--> Key & identity management
                               +--> (Optional) Semantic caching
                               +--> (Optional) Load balancing & failover
+                              +--> (Optional) MCP servers & A2A agents
 ```
+
+---
+
+## Beyond chat: MCP servers and A2A agents
+
+APIM isn't only for chat-completions traffic. The same AI Gateway can also front the two emerging standards for **agentic AI**:
+
+### 🧰 MCP — Model Context Protocol
+
+[MCP](https://modelcontextprotocol.io) lets LLM clients (GitHub Copilot, Claude, ChatGPT, etc.) call your APIs as **tools**. With APIM you can:
+
+- **Expose any REST API as an MCP server** — pick which operations become tools, no extra code. See [Expose REST API as MCP server](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server).
+- **Govern an existing MCP server** — put APIM in front of it for auth, rate limits, and logging. See [Expose an existing MCP server](https://learn.microsoft.com/azure/api-management/expose-existing-mcp-server).
+- **Secure access** with subscription keys or OAuth 2.0 / Microsoft Entra ID. See [Secure access to MCP servers](https://learn.microsoft.com/azure/api-management/secure-mcp-servers).
+
+### 🤝 A2A — Agent-to-Agent
+
+[A2A](https://a2a-protocol.org) is an open JSON-RPC protocol that lets AI agents discover and call each other across frameworks and organizations. With APIM you can:
+
+- **Import an A2A agent** by pointing at its *agent card* URL — APIM creates a proxy API and rewrites the agent card to advertise the gateway endpoint.
+- Apply the same **auth, throttling, and observability** policies you use for REST and MCP traffic.
+- Emit **A2A-specific telemetry** (agent id, agent name) to Application Insights.
+
+See [Import an A2A agent API](https://learn.microsoft.com/azure/api-management/agent-to-agent-api).
+
+> One gateway, three shapes of AI traffic: **REST → LLM**, **MCP tools**, and **A2A agents**.
 
 ---
 
@@ -150,6 +177,8 @@ Once the basics click, explore the rest of the APIM AI Gateway capabilities:
 - **Load balancing & circuit breakers** across multiple Azure OpenAI deployments.
 - **Token-based rate limiting** per product, subscription, or app.
 - **Content safety** integration.
+- **MCP servers** — expose REST APIs as tools for AI agents.
+- **A2A agents** — govern agent-to-agent traffic with the same policies.
 - **Self-hosted gateways** and multi-region deployments.
 
 Helpful references:
