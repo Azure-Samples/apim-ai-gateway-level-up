@@ -19,9 +19,11 @@ var defaultDeployment = app.Configuration["Chat:Deployment"] ?? "gpt-4.1-mini";
 
 app.MapGet("/api/config", () => Results.Ok(new ChatConfig(defaultEndpoint, defaultDeployment)));
 
-// Debug check: calls the read-only /openai/models endpoint to confirm the endpoint is
-// reachable and the current identity has data-plane access. A 200 means you're ready to
-// chat; a 401/403 usually means the role assignment is still propagating (can take ~15-20 min).
+// Debug check: performs a read-only call (GET /openai/models) against the endpoint.
+// This confirms the endpoint is reachable AND the identity's role assignment has landed.
+// Read access propagates *sooner* than the chat/completions action, so a 200 here while
+// chat still 401s tells you the role is assigned and you're just waiting on propagation —
+// not that something else (wrong endpoint, missing role) is misconfigured.
 app.MapPost("/api/check", async (CheckRequest request, IHttpClientFactory httpFactory) =>
 {
     if (string.IsNullOrWhiteSpace(request.Endpoint))
@@ -44,10 +46,12 @@ app.MapPost("/api/check", async (CheckRequest request, IHttpClientFactory httpFa
         var status = (int)resp.StatusCode;
         var ready = resp.IsSuccessStatusCode;
         var message = ready
-            ? "Ready — endpoint reachable and identity has data-plane access."
+            ? "Read access OK — role assignment has landed. If chat still 401s, it's just propagation (wait ~15-20 min); read propagates before the chat action."
             : status is 401 or 403
-                ? "Access denied — role assignment may still be propagating (wait ~15-20 min) or is missing."
-                : $"Unexpected status {status}.";
+                ? "Access denied — role assignment is missing or hasn't started propagating yet."
+                : status is 404
+                    ? "Endpoint not found — check the endpoint URL."
+                    : $"Unexpected status {status}.";
         return Results.Ok(new { status, ready, message });
     }
     catch (Exception ex)
