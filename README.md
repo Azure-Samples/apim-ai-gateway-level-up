@@ -40,6 +40,8 @@ az group create --name $RG --location eastus2
 
 # 2. Deploy infra. Pass your admin email inline (so it's never committed) and your
 #    object ID so the deploy grants you Cognitive Services OpenAI User on Foundry.
+#    Get your logged-in user's object ID (OID) with:
+#       az ad signed-in-user show --query id -o tsv
 az deployment group create -g $RG \
   --template-file infra/main.bicep \
   --parameters infra/main.bicepparam \
