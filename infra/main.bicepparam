@@ -1,10 +1,9 @@
 using './main.bicep'
 
-// Fill these in before deploying.
-param apimPublisherEmail = 'you@example.com'
+// Non-sensitive defaults. apimPublisherEmail is intentionally NOT set here —
+// pass it on the command line so personal admin emails are never committed:
+//   az deployment group create ... --parameters apimPublisherEmail=you@example.com
 param apimPublisherName = 'AI Gateway Level Up'
-
-// Optional overrides (defaults shown).
 param namePrefix = 'aigwlvlup'
 param modelDeploymentName = 'gpt-4.1-mini'
 param modelName = 'gpt-4.1-mini'

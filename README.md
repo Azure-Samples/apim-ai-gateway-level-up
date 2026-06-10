@@ -37,10 +37,11 @@ az account set --subscription "<subscription-id>"
 RG=rg-apim-ai-levelup
 az group create --name $RG --location eastus2
 
-# 2. Deploy infra (set apimPublisherEmail in infra/main.bicepparam first)
+# 2. Deploy infra (pass your admin email inline so it's never committed)
 az deployment group create -g $RG \
   --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam
+  --parameters infra/main.bicepparam \
+  --parameters apimPublisherEmail="you@example.com"
 # APIM Standard V2 can take ~15–30 min.
 
 # 3. Grant yourself access to the model (DefaultAzureCredential uses your login)
