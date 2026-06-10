@@ -31,6 +31,11 @@
   <label for="deployment">Deployment</label>
   <input id="deployment" type="text" value="gpt-4.1-mini" />
 
+  <div class="row">
+    <button id="check" type="button">Check access (debug)</button>
+    <span id="checkResult"></span>
+  </div>
+
   <div id="log"></div>
 
   <div class="row">
@@ -44,6 +49,8 @@
     const deploymentEl = document.getElementById('deployment');
     const messageEl = document.getElementById('message');
     const sendBtn = document.getElementById('send');
+    const checkBtn = document.getElementById('check');
+    const checkResult = document.getElementById('checkResult');
     const history = [];
 
     // Pre-fill from server config (appsettings.json), if provided.
@@ -95,6 +102,29 @@
 
     sendBtn.addEventListener('click', send);
     messageEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+    async function checkAccess() {
+      checkResult.textContent = 'Checking...';
+      checkResult.style.color = '#666';
+      checkBtn.disabled = true;
+      try {
+        const res = await fetch('/api/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: endpointEl.value.trim() })
+        });
+        const data = await res.json();
+        checkResult.textContent = `HTTP ${data.status} — ${data.message}`;
+        checkResult.style.color = data.ready ? '#0a7d28' : '#b00020';
+      } catch (e) {
+        checkResult.textContent = 'Error: ' + e.message;
+        checkResult.style.color = '#b00020';
+      } finally {
+        checkBtn.disabled = false;
+      }
+    }
+
+    checkBtn.addEventListener('click', checkAccess);
   </script>
 </body>
 </html>

@@ -19,10 +19,11 @@ The same gateway can also front **MCP servers** (expose REST APIs as agent tools
   - **Azure AI Foundry** account (`AIServices`) + a **Foundry project**
   - a **`gpt-4.1-mini`** deployment
   - a role assignment giving APIM's identity **Cognitive Services OpenAI User** on Foundry
+  - an **optional** role assignment giving a principal you pass in (`inferenceUserPrincipalId`) the same role, so you can test locally
 
   > The APIM API import and AI-gateway policies are added live during the session — not in the template.
 
-- **[`src/chatapp/`](./src/chatapp)** — a minimal **.NET 10** app (Minimal API + one static page) that chats with the model via the **`Azure.AI.OpenAI`** SDK and **`DefaultAzureCredential`** (no keys). The page has an **editable endpoint field** so you can switch from the Foundry URL to the APIM URL without code changes.
+- **[`src/chatapp/`](./src/chatapp)** — a minimal **.NET 10** app (Minimal API + one static page) that chats with the model via the **`Azure.AI.OpenAI`** SDK and **`DefaultAzureCredential`** (no keys). The page has an **editable endpoint field** so you can switch from the Foundry URL to the APIM URL without code changes, plus a **Check access (debug)** button that calls `/openai/models` to confirm your identity has data-plane access.
 
 ## Prerequisites
 
@@ -37,29 +38,29 @@ az account set --subscription "<subscription-id>"
 RG=rg-apim-ai-levelup
 az group create --name $RG --location eastus2
 
-# 2. Deploy infra (pass your admin email inline so it's never committed)
+# 2. Deploy infra. Pass your admin email inline (so it's never committed) and your
+#    object ID so the deploy grants you Cognitive Services OpenAI User on Foundry.
 az deployment group create -g $RG \
   --template-file infra/main.bicep \
   --parameters infra/main.bicepparam \
-  --parameters apimPublisherEmail="you@example.com"
-# APIM Standard V2 can take ~15–30 min.
+  --parameters apimPublisherEmail="you@example.com" \
+  --parameters inferenceUserPrincipalId="$(az ad signed-in-user show --query id -o tsv)"
+# APIM Standard V2 can take ~15–30 min. The role grant can take a further
+# ~15–20 min to be usable for inference (data-plane RBAC propagation).
 
-# 3. Grant yourself access to the model (DefaultAzureCredential uses your login)
-FOUNDRY=$(az deployment group show -g $RG -n main --query properties.outputs.foundryAccountName.value -o tsv)
-az role assignment create \
-  --assignee "$(az ad signed-in-user show --query id -o tsv)" \
-  --role "Cognitive Services OpenAI User" \
-  --scope "$(az cognitiveservices account show -g $RG -n $FOUNDRY --query id -o tsv)"
-
-# 4. Run the app, then paste the foundryEndpoint output into the page
+# 3. Run the app, then paste the foundryEndpoint output into the page
 cd src/chatapp && dotnet run
 ```
+
+> Omit `inferenceUserPrincipalId` to skip the user role grant (e.g. assign it yourself later).
 
 Get the endpoint to paste with:
 
 ```bash
 az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoint.value -o tsv
 ```
+
+On the page, use **Check access (debug)** to confirm readiness: a **200** means your identity has data-plane access; a **401/403** means the role assignment is still propagating. Then start chatting.
 
 During the session, change the page's **Endpoint** field to your **APIM gateway URL** to route through the gateway. Clean up with `az group delete --name $RG --yes --no-wait`.
 

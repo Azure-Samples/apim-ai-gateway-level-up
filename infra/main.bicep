@@ -37,6 +37,17 @@ param modelVersion string = '2025-04-14'
 @description('Capacity (TPM in thousands) for the model deployment.')
 param modelCapacity int = 10
 
+@description('Object ID (principal) to grant "Cognitive Services OpenAI User" on the Foundry account, e.g. your user so you can test locally with DefaultAzureCredential. Leave empty to skip. Get yours with: az ad signed-in-user show --query id -o tsv')
+param inferenceUserPrincipalId string = ''
+
+@description('Principal type for inferenceUserPrincipalId.')
+@allowed([
+  'User'
+  'Group'
+  'ServicePrincipal'
+])
+param inferenceUserPrincipalType string = 'User'
+
 // Stable, unique-ish suffix for globally-scoped names.
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var foundryAccountName = '${namePrefix}-foundry-${uniqueSuffix}'
@@ -129,6 +140,18 @@ resource apimFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAiUserRoleId)
     principalId: apim.identity.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+// Optional role assignment: a user/group/SP you pass in -> Cognitive Services OpenAI User
+// on the Foundry account, so you can test the chat app locally with DefaultAzureCredential.
+resource userFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(inferenceUserPrincipalId)) {
+  scope: foundry
+  name: guid(foundry.id, inferenceUserPrincipalId, openAiUserRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAiUserRoleId)
+    principalId: inferenceUserPrincipalId
+    principalType: inferenceUserPrincipalType
   }
 }
 
