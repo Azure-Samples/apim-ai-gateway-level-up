@@ -19,8 +19,8 @@ param location string = resourceGroup().location
 @maxLength(12)
 param namePrefix string = 'aigwlvlup'
 
-@description('Publisher email for API Management.')
-param apimPublisherEmail string
+@description('Publisher email for API Management. Override at deploy time with --parameters apimPublisherEmail=you@example.com')
+param apimPublisherEmail string = 'admin@contoso.com'
 
 @description('Publisher name for API Management.')
 param apimPublisherName string = 'AI Gateway Level Up'
