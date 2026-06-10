@@ -45,16 +45,14 @@ az group create --name $RG --location eastus2
 az deployment group create -g $RG \
   --template-file infra/main.bicep \
   --parameters infra/main.bicepparam \
-  --parameters apimPublisherEmail="you@example.com" \
-  --parameters inferenceUserPrincipalId="$(az ad signed-in-user show --query id -o tsv)"
+  --parameters inferenceUserPrincipalId="$(az ad signed-in-user show --query id -o tsv)" \
+  --parameters apimPublisherEmail="you@example.com"
 # APIM Standard V2 can take ~15–30 min. The role grant can take a further
 # ~15–20 min to be usable for inference (data-plane RBAC propagation).
 
 # 3. Run the app, then paste the foundryEndpoint output into the page
 cd src/chatapp && dotnet run
 ```
-
-> Omit `inferenceUserPrincipalId` to skip the user role grant (e.g. assign it yourself later).
 
 Get the endpoint to paste with:
 
