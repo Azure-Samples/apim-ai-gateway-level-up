@@ -28,3 +28,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# .NET build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
