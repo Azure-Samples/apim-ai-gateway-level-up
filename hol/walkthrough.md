@@ -42,9 +42,12 @@ First, prove the model works by calling Foundry directly from the app.
 1. In the [Azure portal](https://portal.azure.com), navigate to your **resource
    group** (`rg-apim-ai-levelup`) and click the **APIM instance**
    (`<your-apim-name>`) to open it.
-2. Go to **APIs** → **+ Add API** → **HTTP** (blank API).
+2. Go to **APIs** → **+ Add API** → **HTTP** (blank API), and select **Full**
+   to show all settings.
 3. Give it a display name — we used **`FoundryPortal`** — and set the **API URL
-   suffix** to `foundry`. Create it.
+   suffix** to `foundry`.
+4. **Uncheck "Subscription required"** (the app calls the gateway without a
+   subscription key). Create it.
 
 ## 3. Create a backend for Foundry
 
