@@ -1,201 +1,95 @@
 # APIM AI Gateway Level Up
 
-A hands-on, level-up training repo that gets you up to speed with using **Azure API Management (APIM)** as an **AI Gateway** in front of **Azure OpenAI**. You'll build a very simple, end-to-end example you can create and implement yourself — from zero to a working, governed AI endpoint.
+A hands-on training repo for using **Azure API Management (APIM)** as an **AI Gateway** in front of **Azure AI Foundry**. You deploy a small starter (APIM + Foundry + a `gpt-4.1-mini` model + a tiny chat app), then wire it through the gateway live during the session.
 
-> **Who is this for?** Developers, architects, and platform engineers who want a fast, practical introduction to the APIM AI Gateway capabilities without wading through a large reference architecture first.
+## Why an AI Gateway?
 
----
-
-## What is the AI Gateway?
-
-When teams start using Large Language Models (LLMs) like those in Azure OpenAI, they quickly hit the same set of challenges:
-
-- **Cost control** — token usage can spike unexpectedly across many apps.
-- **Throttling & fairness** — one noisy app shouldn't starve everyone else.
-- **Security** — backend keys should never be handed out to client apps.
-- **Observability** — who is calling, how much are they spending, and how fast?
-- **Resilience** — load balancing and failover across multiple model deployments.
-
-**Azure API Management** sits between your client applications and your Azure OpenAI (or other model) backends and solves these problems centrally. Acting as an *AI Gateway*, APIM gives you a single, governed front door for all of your AI traffic.
+APIM sits between your apps and your model backends to centrally handle **cost control**, **token rate limiting**, **key/identity management**, **observability**, and **load balancing/failover** — so clients call one governed endpoint instead of the model directly.
 
 ```
-+-------------+        +------------------------+        +---------------------+
-|   Client    |  --->  |  Azure API Management  |  --->  |   Azure OpenAI      |
-|   App / SDK |        |     (AI Gateway)       |        |   (gpt-4o-mini)     |
-+-------------+        +------------------------+        +---------------------+
-                              |
-                              +--> Token rate limiting
-                              +--> Token usage metrics / logging
-                              +--> Key & identity management
-                              +--> (Optional) Semantic caching
-                              +--> (Optional) Load balancing & failover
-                              +--> (Optional) MCP servers & A2A agents
+Client app  ──►  Azure API Management (AI Gateway)  ──►  Azure AI Foundry (gpt-4.1-mini)
 ```
 
----
+The same gateway can also front **MCP servers** (expose REST APIs as agent tools) and **A2A agents** (govern agent-to-agent traffic) with the same policies.
 
-## Beyond chat: MCP servers and A2A agents
+## What's in this repo
 
-APIM isn't only for chat-completions traffic. The same AI Gateway can also front the two emerging standards for **agentic AI**:
+- **[`infra/`](./infra)** — one Bicep template (`main.bicep`) that provisions:
+  - **APIM Standard V2** with a system-assigned managed identity
+  - **Azure AI Foundry** account (`AIServices`) + a **Foundry project**
+  - a **`gpt-4.1-mini`** deployment
+  - a role assignment giving APIM's identity **Cognitive Services OpenAI User** on Foundry
+  - an **optional** role assignment giving a principal you pass in (`inferenceUserPrincipalId`) the same role, so you can test locally
 
-### 🧰 MCP — Model Context Protocol
+  > The APIM API import and AI-gateway policies are added live during the session — not in the template.
 
-[MCP](https://modelcontextprotocol.io) lets LLM clients (GitHub Copilot, Claude, ChatGPT, etc.) call your APIs as **tools**. With APIM you can:
-
-- **Expose any REST API as an MCP server** — pick which operations become tools, no extra code. See [Expose REST API as MCP server](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server).
-- **Govern an existing MCP server** — put APIM in front of it for auth, rate limits, and logging. See [Expose an existing MCP server](https://learn.microsoft.com/azure/api-management/expose-existing-mcp-server).
-- **Secure access** with subscription keys or OAuth 2.0 / Microsoft Entra ID. See [Secure access to MCP servers](https://learn.microsoft.com/azure/api-management/secure-mcp-servers).
-
-### 🤝 A2A — Agent-to-Agent
-
-[A2A](https://a2a-protocol.org) is an open JSON-RPC protocol that lets AI agents discover and call each other across frameworks and organizations. With APIM you can:
-
-- **Import an A2A agent** by pointing at its *agent card* URL — APIM creates a proxy API and rewrites the agent card to advertise the gateway endpoint.
-- Apply the same **auth, throttling, and observability** policies you use for REST and MCP traffic.
-- Emit **A2A-specific telemetry** (agent id, agent name) to Application Insights.
-
-See [Import an A2A agent API](https://learn.microsoft.com/azure/api-management/agent-to-agent-api).
-
-> One gateway, three shapes of AI traffic: **REST → LLM**, **MCP tools**, and **A2A agents**.
-
----
-
-## What you'll build
-
-In this level-up you will create a minimal but complete AI Gateway:
-
-1. **Provision** an Azure API Management instance and an Azure OpenAI resource with a chat model deployment (e.g. `gpt-4o-mini`).
-2. **Import** the Azure OpenAI API into APIM so it's exposed as a managed API.
-3. **Secure** the backend by keeping the Azure OpenAI key inside APIM and issuing APIM subscription keys to clients.
-4. **Govern** traffic by applying the **token limit** policy and the **emit token metric** policy.
-5. **Call** your new gateway endpoint and watch the policies and metrics in action.
-
-By the end you'll have a single endpoint that your apps can call exactly like Azure OpenAI — but with cost, security, and observability handled for you.
-
----
+- **[`src/chatapp/`](./src/chatapp)** — a minimal **.NET 10** app (Minimal API + one static page) that chats with the model via the **`Azure.AI.OpenAI`** SDK and **`DefaultAzureCredential`** (no keys). The page has an **editable endpoint field** so you can switch from the Foundry URL to the APIM URL without code changes, plus a **Check access (debug)** button that calls `/openai/models` to confirm your identity has data-plane access.
 
 ## Prerequisites
 
-| Requirement | Notes |
-|-------------|-------|
-| Azure subscription | With permission to create APIM and Azure OpenAI resources |
-| Access to Azure OpenAI | [Request access](https://aka.ms/oai/access) if you don't have it yet |
-| [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) | `az login` and select your subscription |
-| A REST client | `curl`, [Bruno](https://www.usebruno.com/), Postman, or VS Code REST Client |
+- Azure subscription (rights to create APIM + AI Foundry), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and `gpt-4.1-mini` availability in your region.
 
-> 💡 **Cost note:** APIM has a [free/Developer tier](https://azure.microsoft.com/pricing/details/api-management/) suitable for learning. Azure OpenAI is billed per token. Remember to clean up resources when you're done.
-
----
-
-## Quickstart
-
-> The steps below are intentionally high-level so you can learn by doing. Detailed, copy-pasteable scripts live in the [`infra/`](./infra) and [`docs/`](./docs) folders (to be added as the repo grows).
-
-### 1. Sign in and set variables
+## Deploy & run
 
 ```bash
+# 1. Sign in and create a resource group
 az login
-az account set --subscription "<your-subscription-id>"
-
+az account set --subscription "<subscription-id>"
 RG=rg-apim-ai-levelup
-LOCATION=eastus
+az group create --name $RG --location eastus2
+
+# 2. Deploy infra. Pass your admin email inline (so it's never committed) and your
+#    object ID so the deploy grants you Cognitive Services OpenAI User on Foundry.
+#    Get your logged-in user's object ID (OID) with:
+#       az ad signed-in-user show --query id -o tsv
+az deployment group create -g $RG \
+  --template-file infra/main.bicep \
+  --parameters infra/main.bicepparam \
+  --parameters inferenceUserPrincipalId="$(az ad signed-in-user show --query id -o tsv)" \
+  --parameters apimPublisherEmail="you@example.com"
+# APIM Standard V2 can take ~15–30 min. The role grant can take a further
+# ~15–20 min to be usable for inference (data-plane RBAC propagation).
+
+# 3. Run the app (then follow the walkthrough to test and wire up the gateway)
+cd src/chatapp && dotnet run
 ```
 
-### 2. Create the resource group
+Once the app is running, follow the **[hands-on walkthrough](./hol/walkthrough.md)**: it walks you through testing the chat against Foundry directly, importing the Foundry endpoint as an API in APIM with a managed-identity policy, then switching the app to the APIM gateway URL.
+
+## Clean up
+
+Deleting the resource group is **not enough** — both **APIM** and **Azure AI Foundry (Cognitive Services)** are *soft-deleted* and keep reserving their names (and incurring some retention) until purged. Delete the group first, then purge both — otherwise the names can't be reused. (Capture the names *before* deleting; once the group is gone you can recover them with the list commands below.)
 
 ```bash
-az group create --name $RG --location $LOCATION
+# Capture the resource names BEFORE you delete the group
+APIM_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.apimName.value -o tsv)
+FOUNDRY_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.foundryAccountName.value -o tsv)
+LOCATION=eastus2
+
+# 1. Delete the resource group and WAIT (so the soft-deleted entries exist before purge)
+az group delete --name $RG --yes
+
+# 2. Purge the soft-deleted APIM instance
+az apim deletedservice purge --service-name $APIM_NAME --location $LOCATION
+
+# 3. Purge the soft-deleted Foundry (Cognitive Services) account
+az cognitiveservices account purge --name $FOUNDRY_NAME --resource-group $RG --location $LOCATION
 ```
 
-### 3. Deploy Azure OpenAI + a model deployment
-
-Create an Azure OpenAI resource and deploy a chat model (for example `gpt-4o-mini`). Note the **endpoint** and **key**.
-
-### 4. Deploy Azure API Management
-
-Create an APIM instance (Developer or Basic v2 tier is fine for learning). This can take a little while to provision.
-
-### 5. Import Azure OpenAI into APIM
-
-In the APIM portal, use **APIs → Add API → Azure OpenAI Service** to import your Azure OpenAI resource. APIM will create the operations and let you store the backend key as a named value/secret.
-
-### 6. Add AI Gateway policies
-
-Apply these policies to the API to turn APIM into an AI Gateway:
-
-- [`azure-openai-token-limit`](https://learn.microsoft.com/azure/api-management/azure-openai-token-limit-policy) — cap tokens per subscription/time window.
-- [`azure-openai-emit-token-metric`](https://learn.microsoft.com/azure/api-management/azure-openai-emit-token-metric-policy) — emit token-usage metrics to Application Insights.
-
-### 7. Call your gateway
+If you already deleted the group and don't have the names, list what's pending purge:
 
 ```bash
-curl -X POST "https://<your-apim-name>.azure-api.net/openai/deployments/gpt-4o-mini/chat/completions?api-version=2024-02-01" \
-  -H "Content-Type: application/json" \
-  -H "api-key: <your-APIM-subscription-key>" \
-  -d '{
-    "messages": [
-      { "role": "system", "content": "You are a helpful assistant." },
-      { "role": "user", "content": "In one sentence, what is an AI gateway?" }
-    ]
-  }'
+az apim deletedservice list -o table
+az cognitiveservices account list-deleted -o table
 ```
-
-Notice that clients use the **APIM subscription key** — never the Azure OpenAI key.
-
-### 8. Clean up
-
-```bash
-az group delete --name $RG --yes --no-wait
-```
-
----
-
-## Repository structure
-
-As the training evolves, the repo will be organized like this:
-
-```
-.
-├── README.md            # You are here
-├── LICENSE              # MIT
-├── CONTRIBUTING.md      # How to contribute
-├── CODE_OF_CONDUCT.md   # Microsoft Open Source Code of Conduct
-├── SECURITY.md          # How to report security issues
-├── docs/                # Step-by-step guides and explanations
-└── infra/               # Bicep/Terraform to provision the example
-```
-
-> `docs/` and `infra/` are placeholders for upcoming content — the README is the starting point for the level-up.
-
----
 
 ## Going further
 
-Once the basics click, explore the rest of the APIM AI Gateway capabilities:
+[AI Gateway overview](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities) · [AI-gateway policies](https://learn.microsoft.com/azure/api-management/api-management-policies#ai-gateway) · [AI-Gateway samples](https://github.com/Azure-Samples/AI-Gateway) · [MCP in APIM](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server) · [A2A in APIM](https://learn.microsoft.com/azure/api-management/agent-to-agent-api)
 
-- **Semantic caching** to cut cost and latency for repeated prompts.
-- **Load balancing & circuit breakers** across multiple Azure OpenAI deployments.
-- **Token-based rate limiting** per product, subscription, or app.
-- **Content safety** integration.
-- **MCP servers** — expose REST APIs as tools for AI agents.
-- **A2A agents** — govern agent-to-agent traffic with the same policies.
-- **Self-hosted gateways** and multi-region deployments.
+## Contributing & License
 
-Helpful references:
-
-- [APIM AI Gateway overview](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities)
-- [AI Gateway policies reference](https://learn.microsoft.com/azure/api-management/api-management-policies#ai-gateway)
-- [AI-Gateway samples & labs (GitHub)](https://github.com/Azure-Samples/AI-Gateway)
-
----
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
-
-## License
-
-This project is licensed under the terms of the [MIT License](./LICENSE).
+Contributions welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md). Licensed under the [MIT License](./LICENSE).
 
 ## Trademarks
 

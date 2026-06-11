@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session One Chat</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.3rem; }
+    label { display: block; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+    input { width: 100%; padding: 0.5rem; box-sizing: border-box; font-size: 0.95rem; }
+    .row { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .row input { flex: 1; }
+    button { padding: 0.5rem 1rem; font-size: 0.95rem; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #log { margin-top: 1rem; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem; min-height: 200px; }
+    .msg { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-radius: 6px; white-space: pre-wrap; }
+    .user { background: #e7f0ff; }
+    .assistant { background: #f0f0f0; }
+    .error { color: #b00020; }
+    small { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Session One – Foundry Chat</h1>
+  <p><small>Set the endpoint below. Use the Foundry endpoint now, then swap it for your APIM gateway URL during the demo.</small></p>
+
+  <label for="endpoint">Endpoint</label>
+  <input id="endpoint" type="text" placeholder="https://your-foundry.openai.azure.com/ (or your APIM URL)" />
+
+  <label for="deployment">Deployment</label>
+  <input id="deployment" type="text" value="gpt-4.1-mini" />
+
+  <div class="row">
+    <button id="check" type="button">Check access (debug)</button>
+    <span id="checkResult"></span>
+  </div>
+
+  <div id="log"></div>
+
+  <div class="row">
+    <input id="message" type="text" placeholder="Type a message..." />
+    <button id="send">Send</button>
+  </div>
+
+  <script>
+    const log = document.getElementById('log');
+    const endpointEl = document.getElementById('endpoint');
+    const deploymentEl = document.getElementById('deployment');
+    const messageEl = document.getElementById('message');
+    const sendBtn = document.getElementById('send');
+    const checkBtn = document.getElementById('check');
+    const checkResult = document.getElementById('checkResult');
+    const history = [];
+
+    // Pre-fill from server config (appsettings.json), if provided.
+    fetch('/api/config').then(r => r.json()).then(c => {
+      if (c.endpoint) endpointEl.value = c.endpoint;
+      if (c.deployment) deploymentEl.value = c.deployment;
+    }).catch(() => {});
+
+    function append(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'error');
+      div.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'Assistant: ' : '') + text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function send() {
+      const content = messageEl.value.trim();
+      if (!content) return;
+      append('user', content);
+      history.push({ role: 'user', content });
+      messageEl.value = '';
+      sendBtn.disabled = true;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: endpointEl.value.trim(),
+            deployment: deploymentEl.value.trim(),
+            messages: history
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          append('error', 'Error: ' + (err.error || err.detail || res.statusText));
+        } else {
+          const data = await res.json();
+          append('assistant', data.reply);
+          history.push({ role: 'assistant', content: data.reply });
+        }
+      } catch (e) {
+        append('error', 'Error: ' + e.message);
+      } finally {
+        sendBtn.disabled = false;
+        messageEl.focus();
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    messageEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+    async function checkAccess() {
+      checkResult.textContent = 'Checking...';
+      checkResult.style.color = '#666';
+      checkBtn.disabled = true;
+      try {
+        const res = await fetch('/api/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: endpointEl.value.trim() })
+        });
+        const data = await res.json();
+        checkResult.textContent = `HTTP ${data.status} — ${data.message}`;
+        checkResult.style.color = data.ready ? '#0a7d28' : '#b00020';
+      } catch (e) {
+        checkResult.textContent = 'Error: ' + e.message;
+        checkResult.style.color = '#b00020';
+      } finally {
+        checkBtn.disabled = false;
+      }
+    }
+
+    checkBtn.addEventListener('click', checkAccess);
+  </script>
+</body>
+</html>
