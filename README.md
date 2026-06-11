@@ -66,7 +66,7 @@ During the session, change the page's **Endpoint** field to your **APIM gateway 
 
 ## Clean up
 
-Deleting the resource group is **not enough** — both **APIM** and **Azure AI Foundry (Cognitive Services)** are *soft-deleted* and keep reserving their names (and incurring some retention) until purged. Purge them after deleting the group, or the names can't be reused.
+Deleting the resource group is **not enough** — both **APIM** and **Azure AI Foundry (Cognitive Services)** are *soft-deleted* and keep reserving their names (and incurring some retention) until purged. Delete the group first, then purge both — otherwise the names can't be reused. (Capture the names *before* deleting; once the group is gone you can recover them with the list commands below.)
 
 ```bash
 # Capture the resource names BEFORE you delete the group
@@ -74,8 +74,8 @@ APIM_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.a
 FOUNDRY_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.foundryAccountName.value -o tsv)
 LOCATION=eastus2
 
-# 1. Delete the resource group
-az group delete --name $RG --yes --no-wait
+# 1. Delete the resource group and WAIT (so the soft-deleted entries exist before purge)
+az group delete --name $RG --yes
 
 # 2. Purge the soft-deleted APIM instance
 az apim deletedservice purge --service-name $APIM_NAME --location $LOCATION
