@@ -37,6 +37,14 @@ First, prove the model works by calling Foundry directly from the app.
    You should get a response. A **401** here (with a 200 on the debug check) also
    means propagation — wait a bit and resend.
 
+> **Heads-up — two different endpoints:** the Foundry **portal playground** shows a
+> *project* endpoint like `https://<name>.services.ai.azure.com/api/projects/<project>`,
+> which is used by the Azure AI Foundry project SDK and the Agent service. We
+> deliberately use the **Azure OpenAI data-plane** endpoint
+> (`https://<name>.cognitiveservices.azure.com/openai/...`) instead — it hits the
+> **same model**, but it's the clean `/openai/...` route that APIM fronts in this
+> lab. Same model, different API surface.
+
 ## 2. Create the API in APIM
 
 1. In the [Azure portal](https://portal.azure.com), navigate to your **resource
