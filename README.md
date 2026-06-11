@@ -62,7 +62,34 @@ az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoi
 
 On the page, use **Check access (debug)** to confirm readiness: a **200** means your identity has data-plane access; a **401/403** means the role assignment is still propagating. Then start chatting.
 
-During the session, change the page's **Endpoint** field to your **APIM gateway URL** to route through the gateway. Clean up with `az group delete --name $RG --yes --no-wait`.
+During the session, change the page's **Endpoint** field to your **APIM gateway URL** to route through the gateway.
+
+## Clean up
+
+Deleting the resource group is **not enough** — both **APIM** and **Azure AI Foundry (Cognitive Services)** are *soft-deleted* and keep reserving their names (and incurring some retention) until purged. Purge them after deleting the group, or the names can't be reused.
+
+```bash
+# Capture the resource names BEFORE you delete the group
+APIM_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.apimName.value -o tsv)
+FOUNDRY_NAME=$(az deployment group show -g $RG -n main --query properties.outputs.foundryAccountName.value -o tsv)
+LOCATION=eastus2
+
+# 1. Delete the resource group
+az group delete --name $RG --yes --no-wait
+
+# 2. Purge the soft-deleted APIM instance
+az apim deletedservice purge --service-name $APIM_NAME --location $LOCATION
+
+# 3. Purge the soft-deleted Foundry (Cognitive Services) account
+az cognitiveservices account purge --name $FOUNDRY_NAME --resource-group $RG --location $LOCATION
+```
+
+If you already deleted the group and don't have the names, list what's pending purge:
+
+```bash
+az apim deletedservice list -o table
+az cognitiveservices account list-deleted -o table
+```
 
 ## Going further
 
