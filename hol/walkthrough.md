@@ -30,8 +30,8 @@ First, prove the model works by calling Foundry directly from the app.
      (data-plane RBAC can take ~15–20 min). Wait a few minutes and try again.
 5. Paste this prompt into the message box and hit **Send**:
 
-   ```
-   <add your sample prompt here>
+   ``` text
+   Complete the following sentence with one word: It is a beautiful day outside let's go to the
    ```
 
    You should get a response. A **401** here (with a 200 on the debug check) also
