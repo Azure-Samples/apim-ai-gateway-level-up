@@ -39,8 +39,9 @@ First, prove the model works by calling Foundry directly from the app.
 
 ## 2. Create the API in APIM
 
-1. In the [Azure portal](https://portal.azure.com), open your **APIM** instance
-   (`<your-apim-name>`).
+1. In the [Azure portal](https://portal.azure.com), navigate to your **resource
+   group** (`rg-apim-ai-levelup`) and click the **APIM instance**
+   (`<your-apim-name>`) to open it.
 2. Go to **APIs** → **+ Add API** → **HTTP** (blank API).
 3. Give it a display name — we used **`FoundryPortal`** — and set the **API URL
    suffix** to `foundry`. Create it.
