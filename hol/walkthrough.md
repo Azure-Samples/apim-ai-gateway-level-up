@@ -46,7 +46,24 @@ First, prove the model works by calling Foundry directly from the app.
 3. Give it a display name — we used **`FoundryPortal`** — and set the **API URL
    suffix** to `foundry`. Create it.
 
-## 3. Add the POST operation
+## 3. Create a backend for Foundry
+
+1. In your APIM instance, go to **Backends** → **+ Add**.
+2. Configure:
+   - **Name:** `foundry-backend`
+   - **Type:** Custom URL
+   - **Runtime URL:** your **Foundry endpoint** — copy it from the same
+     `foundryEndpoint` output you used to set the app's Endpoint field in step 1:
+
+     ```bash
+     az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoint.value -o tsv
+     ```
+3. Create it.
+
+> Using a named backend (instead of a hard-coded URL in the policy) keeps the
+> endpoint in one place and is what you'll reference from the policy below.
+
+## 4. Add the POST operation
 
 1. On the new API, select **+ Add operation**.
 2. Configure:
@@ -58,12 +75,12 @@ First, prove the model works by calling Foundry directly from the app.
 > The wildcard path lets you pass the full Foundry route through the gateway,
 > e.g. `/openai/deployments/gpt-4.1-mini/chat/completions`.
 
-## 4. Add the gateway policy
+## 5. Add the gateway policy
 
 Open the API, select **All operations**, then the **policy code editor**
 (`</>` in the **Inbound processing** box) and paste the policy below.
 
-This points the backend at your Foundry account and has APIM attach a **managed
+This routes to the `foundry-backend` you created and has APIM attach a **managed
 identity** token on every call, so clients never need a key or their own role on
 Foundry — the gateway handles auth.
 
@@ -71,8 +88,8 @@ Foundry — the gateway handles auth.
 <policies>
     <inbound>
         <base />
-        <!-- Route to your Foundry account (no trailing slash) -->
-        <set-backend-service base-url="https://<your-foundry-name>.cognitiveservices.azure.com" />
+        <!-- Route to the Foundry backend created in step 3 -->
+        <set-backend-service backend-id="foundry-backend" />
         <!-- APIM's managed identity gets a token for the Cognitive Services data plane -->
         <authentication-managed-identity
             resource="https://cognitiveservices.azure.com"
@@ -94,13 +111,12 @@ Foundry — the gateway handles auth.
 </policies>
 ```
 
-> Replace `<your-foundry-name>` with your Foundry account name. APIM's managed
-> identity already has **Cognitive Services OpenAI User** on Foundry (granted by
-> the Bicep deployment).
+> No keys or secrets in the policy — APIM's managed identity already has
+> **Cognitive Services OpenAI User** on Foundry (granted by the Bicep deployment).
 
 Save the policy.
 
-## 5. Re-test through the APIM gateway
+## 6. Re-test through the APIM gateway
 
 1. Replace the **Endpoint** field with your **APIM gateway URL + the API suffix**:
    `https://<your-apim-name>.azure-api.net/foundry`
