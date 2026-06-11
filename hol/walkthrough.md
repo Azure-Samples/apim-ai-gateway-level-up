@@ -5,9 +5,9 @@ so APIM authenticates to Foundry with its **managed identity**, and prove it end
 to end with the chat app — first calling Foundry directly, then through the
 gateway.
 
-> **Before you start:** the infra is deployed (see the root [README](../README.md))
-> and the chat app is running locally (`cd src/chatapp && dotnet run`). Have your
-> **Foundry endpoint** and **deployment name** (`gpt-4.1-mini`) handy.
+> **Before you start:** complete the **Deploy & run** steps in the
+> [README](../README.md) first — infra deployed and the chat app running locally.
+> Have your **Foundry endpoint** and **deployment name** (`gpt-4.1-mini`) handy.
 
 ---
 

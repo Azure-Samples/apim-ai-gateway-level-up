@@ -62,7 +62,7 @@ az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoi
 
 On the page, use **Check access (debug)** to confirm readiness: a **200** means your identity has data-plane access; a **401/403** means the role assignment is still propagating. Then start chatting.
 
-During the session, change the page's **Endpoint** field to your **APIM gateway URL** to route through the gateway.
+During the session, you'll wire the app through the gateway. Follow the **[hands-on walkthrough](./hol/walkthrough.md)** to import the Foundry endpoint as an API in APIM, add the managed-identity policy, and switch the app's **Endpoint** field to the APIM gateway URL.
 
 ## Clean up
 
