@@ -70,6 +70,8 @@ First, prove the model works by calling Foundry directly from the app.
    - **Display name:** `PostFoundry`
    - **URL:** `POST` with path `/*` (wildcard — forwards the full Foundry path)
    - **Query parameter:** add `api-version`, default value `2024-10-21`
+   - **Header:** add `Content-Type`, default value `application/json` (Foundry
+     requires this to parse the request body — without it you'll get a 400)
 3. Save.
 
 > The wildcard path lets you pass the full Foundry route through the gateway,
