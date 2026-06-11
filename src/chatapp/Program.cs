@@ -79,7 +79,13 @@ app.MapPost("/api/chat", async (ChatRequest request) =>
         // DefaultAzureCredential: uses your local `az login` identity (or a managed
         // identity when hosted). The identity needs the "Cognitive Services OpenAI User"
         // role on the Foundry account.
-        var client = new AzureOpenAIClient(endpointUri, new DefaultAzureCredential());
+        // Disable automatic retries so upstream 429s (e.g. APIM rate-limit) surface
+        // immediately instead of being retried/masked by the SDK.
+        var options = new AzureOpenAIClientOptions
+        {
+            RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(maxRetries: 0),
+        };
+        var client = new AzureOpenAIClient(endpointUri, new DefaultAzureCredential(), options);
         ChatClient chatClient = client.GetChatClient(request.Deployment);
 
         var messages = new List<ChatMessage>();
