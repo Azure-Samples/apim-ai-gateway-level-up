@@ -26,6 +26,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Office temp/lock files
+~$*
+
 # Logs
 *.log
 
