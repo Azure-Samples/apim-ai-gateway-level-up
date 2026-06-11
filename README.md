@@ -50,19 +50,11 @@ az deployment group create -g $RG \
 # APIM Standard V2 can take ~15–30 min. The role grant can take a further
 # ~15–20 min to be usable for inference (data-plane RBAC propagation).
 
-# 3. Run the app, then paste the foundryEndpoint output into the page
+# 3. Run the app (then follow the walkthrough to test and wire up the gateway)
 cd src/chatapp && dotnet run
 ```
 
-Get the endpoint to paste with:
-
-```bash
-az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoint.value -o tsv
-```
-
-On the page, use **Check access (debug)** to confirm readiness: a **200** means your identity has data-plane access; a **401/403** means the role assignment is still propagating. Then start chatting.
-
-During the session, you'll wire the app through the gateway. Follow the **[hands-on walkthrough](./hol/walkthrough.md)** to import the Foundry endpoint as an API in APIM, add the managed-identity policy, and switch the app's **Endpoint** field to the APIM gateway URL.
+Once the app is running, follow the **[hands-on walkthrough](./hol/walkthrough.md)**: it walks you through testing the chat against Foundry directly, importing the Foundry endpoint as an API in APIM with a managed-identity policy, then switching the app to the APIM gateway URL.
 
 ## Clean up
 

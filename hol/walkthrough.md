@@ -7,11 +7,37 @@ gateway.
 
 > **Before you start:** complete the **Deploy & run** steps in the
 > [README](../README.md) first — infra deployed and the chat app running locally.
-> Have your **Foundry endpoint** and **deployment name** (`gpt-4.1-mini`) handy.
 
 ---
 
-## 1. Create the API in APIM
+## 1. Get the Foundry endpoint and test the chat directly
+
+First, prove the model works by calling Foundry directly from the app.
+
+1. Get your Foundry endpoint (run from the repo root, with `RG` set to your
+   resource group):
+
+   ```bash
+   az deployment group show -g $RG -n main --query properties.outputs.foundryEndpoint.value -o tsv
+   ```
+
+2. The chat app should already be running — open it in your browser
+   (`http://localhost:5152`).
+3. Paste the **Foundry endpoint** into the **Endpoint** field at the top, and
+   confirm the **Deployment** is `gpt-4.1-mini`.
+4. Click **Check access (debug)** — you should get a **200**.
+   - If you get a **401/403**, your role assignment just hasn't propagated yet
+     (data-plane RBAC can take ~15–20 min). Wait a few minutes and try again.
+5. Paste this prompt into the message box and hit **Send**:
+
+   ```
+   <add your sample prompt here>
+   ```
+
+   You should get a response. A **401** here (with a 200 on the debug check) also
+   means propagation — wait a bit and resend.
+
+## 2. Create the API in APIM
 
 1. In the [Azure portal](https://portal.azure.com), open your **APIM** instance
    (`<your-apim-name>`).
@@ -19,7 +45,7 @@ gateway.
 3. Give it a display name — we used **`FoundryPortal`** — and set the **API URL
    suffix** to `foundry`. Create it.
 
-## 2. Add the POST operation
+## 3. Add the POST operation
 
 1. On the new API, select **+ Add operation**.
 2. Configure:
@@ -31,7 +57,7 @@ gateway.
 > The wildcard path lets you pass the full Foundry route through the gateway,
 > e.g. `/openai/deployments/gpt-4.1-mini/chat/completions`.
 
-## 3. Add the gateway policy
+## 4. Add the gateway policy
 
 Open the API, select **All operations**, then the **policy code editor**
 (`</>` in the **Inbound processing** box) and paste the policy below.
@@ -73,25 +99,7 @@ Foundry — the gateway handles auth.
 
 Save the policy.
 
-## 4. Test against Foundry directly
-
-1. The chat app should already be running. Open it in your browser
-   (`http://localhost:5152`).
-2. In the **Endpoint** field at the top, paste your **Foundry endpoint**:
-   `https://<your-foundry-name>.cognitiveservices.azure.com/`
-3. Click **Check access (debug)** — you should get a **200**.
-   - If you get a **401/403**, the role assignment just hasn't propagated yet
-     (data-plane RBAC can take ~15–20 min). Wait a few minutes and try again.
-4. Paste this prompt into the message box and hit **Send**:
-
-   ```
-   <add your sample prompt here>
-   ```
-
-   You should get a response. A **401** here (with a 200 on the debug check) also
-   means propagation — wait a bit and resend.
-
-## 5. Test through the APIM gateway
+## 5. Re-test through the APIM gateway
 
 1. Replace the **Endpoint** field with your **APIM gateway URL + the API suffix**:
    `https://<your-apim-name>.azure-api.net/foundry`
