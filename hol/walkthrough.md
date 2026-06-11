@@ -65,7 +65,7 @@ First, prove the model works by calling Foundry directly from the app.
 
 ## 4. Add the POST operation
 
-1. On the new API, select **+ Add operation**.
+1. Navigate back to **APIs** → **FoundryPortal**, then select **+ Add operation**.
 2. Configure:
    - **Display name:** `PostFoundry`
    - **URL:** `POST` with path `/*` (wildcard — forwards the full Foundry path)
