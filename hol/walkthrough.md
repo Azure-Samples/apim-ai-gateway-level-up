@@ -162,5 +162,20 @@ built-in test console.
 3. You should get the same kind of response — but this time the call went through
    APIM, which authenticated to Foundry on your behalf. 🎉
 
-> From here you can layer on AI-gateway policies (token rate limiting, semantic
+> From here you can layer on AI-gateway policies (rate/token limiting, semantic
 > caching, load balancing) — all without touching the client.
+>
+> **Try it — limit to 3 calls per minute.** Add this to the **inbound** section of
+> the **All operations** policy (just after `<base />`), then send the prompt 4+
+> times quickly — the 4th call returns **429 Too Many Requests**:
+>
+> ```xml
+> <rate-limit calls="3" renewal-period="60" />
+> ```
+>
+> That caps the *number of calls*. To cap *token consumption* instead (tokens per
+> minute), use the AI-gateway token-limit policy:
+>
+> ```xml
+> <azure-openai-token-limit tokens-per-minute="1000" counter-key="@(context.Subscription?.Id ?? "anonymous")" />
+> ```
