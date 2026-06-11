@@ -129,7 +129,32 @@ Foundry — the gateway handles auth.
 
 Save the policy.
 
-## 6. Re-test through the APIM gateway
+## 6. Test in the APIM test console
+
+Before pointing the app at the gateway, verify the API works using APIM's
+built-in test console.
+
+1. On **FoundryPortal** → **PostFoundry**, open the **Test** tab.
+2. **Template parameter** — set the wildcard (`*`) to the Foundry route:
+   `openai/deployments/gpt-4.1-mini/chat/completions`
+3. **Query parameter** — confirm `api-version` = `2024-10-21`.
+4. **Header** — confirm `Content-Type` = `application/json`.
+5. **Request body** — paste the full JSON (same prompt as before):
+
+   ```json
+   {
+     "messages": [
+       { "role": "user", "content": "Complete the following sentence with one word: It is a beautiful day outside let's go to the" }
+     ]
+   }
+   ```
+
+6. Click **Send**. You should get a **200** with a chat completion response.
+   - A **401/403** means APIM's managed-identity role is still propagating, or the
+     policy/backend isn't saved correctly.
+   - A **400** usually means the `Content-Type` header is missing.
+
+## 7. Re-test through the APIM gateway
 
 1. Replace the **Endpoint** field with your **APIM gateway URL + the API suffix**:
    `https://<your-apim-name>.azure-api.net/foundry`
