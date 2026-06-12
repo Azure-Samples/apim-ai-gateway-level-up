@@ -12,6 +12,21 @@ Client app  ──►  Azure API Management (AI Gateway)  ──►  Azure AI Fo
 
 The same gateway can also front **MCP servers** (expose REST APIs as agent tools) and **A2A agents** (govern agent-to-agent traffic) with the same policies.
 
+## Session agenda
+
+This repo is organized **by branch** — each session has its own branch containing just the starter code and walkthrough for that session. The **`main`** branch is the **"full" version**: it contains everything needed across all sessions combined.
+
+Each session branch has the matching starter code and walkthrough:
+
+| Session | Topic |
+| --- | --- |
+| [Session 1](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-one) | APIM intro, APIM AI abilities, and AI Foundry |
+| [Session 2](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-two) | Focusing on AI Gateway policies + demo |
+| [Session 3](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-three) | MCP + A2A |
+| [Session 4](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-four) | Learning / customer use cases |
+| [Session 5](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-five) | New AI Gateway |
+| [Session 6](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-six) | API Center |
+
 ## What's in this repo
 
 - **[`infra/`](./infra)** — one Bicep template (`main.bicep`) that provisions:
