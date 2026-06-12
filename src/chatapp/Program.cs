@@ -62,7 +62,7 @@ app.MapPost("/api/check", async (CheckRequest request, IHttpClientFactory httpFa
 
 // Chat completion. The endpoint is supplied per request so it can be swapped
 // (e.g. from the Foundry URL to the APIM gateway URL) without restarting the app.
-app.MapPost("/api/chat", async (ChatRequest request) =>
+app.MapPost("/api/chat", async (ChatRequest request, ILogger<Program> logger) =>
 {
     if (string.IsNullOrWhiteSpace(request.Endpoint))
         return Results.BadRequest(new { error = "Endpoint is required." });
@@ -99,8 +99,23 @@ app.MapPost("/api/chat", async (ChatRequest request) =>
             });
         }
 
+        var endpointBaseUrl = request.Endpoint.TrimEnd('/');
+        const string apiVersion = "2024-10-21";
+        var upstreamChatUrl =
+            $"{endpointBaseUrl}/openai/deployments/{Uri.EscapeDataString(request.Deployment)}/chat/completions?api-version={apiVersion}";
+
+        logger.LogInformation(
+            "Calling upstream chat completion. requestPath={RequestPath} endpointUrl={EndpointUrl} upstreamUrl={UpstreamUrl} deployment={Deployment}",
+            "/api/chat",
+            endpointBaseUrl,
+            upstreamChatUrl,
+            request.Deployment);
+
         ChatCompletion completion = await chatClient.CompleteChatAsync(messages);
         var reply = completion.Content.Count > 0 ? completion.Content[0].Text : "";
+
+        logger.LogInformation("Successful /api/chat call. requestPath={RequestPath}", "/api/chat");
+
         return Results.Ok(new { reply });
     }
     catch (RequestFailedException ex)
