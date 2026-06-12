@@ -85,7 +85,7 @@ az cognitiveservices account list-deleted -o table
 
 ## Going further
 
-[AI Gateway overview](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities) · [AI-gateway policies](https://learn.microsoft.com/azure/api-management/api-management-policies#ai-gateway) · [AI-Gateway samples](https://github.com/Azure-Samples/AI-Gateway) · [MCP in APIM](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server) · [A2A in APIM](https://learn.microsoft.com/azure/api-management/agent-to-agent-api)
+[AI Gateway overview](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities) · [AI-gateway policies](https://learn.microsoft.com/azure/api-management/api-management-policies#ai-gateway) · [AI-Gateway samples](https://github.com/Azure-Samples/AI-Gateway) · [MCP in APIM](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server) · [A2A in APIM](https://learn.microsoft.com/azure/api-management/agent-to-agent-api) · [Create Foundry Quickstart](https://learn.microsoft.com/en-us/azure/foundry/tutorials/quickstart-create-foundry-resources?tabs=azurecli)
 
 ## Contributing & License
 
