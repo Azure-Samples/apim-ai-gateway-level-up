@@ -33,8 +33,12 @@ Each session branch has the matching starter code and walkthrough:
   - **APIM Standard V2** with a system-assigned managed identity
   - **Azure AI Foundry** account (`AIServices`) + a **Foundry project**
   - a **`gpt-4.1-mini`** deployment
+  - a **`text-embedding-ada-002`** deployment
   - a role assignment giving APIM's identity **Cognitive Services OpenAI User** on Foundry
   - an **optional** role assignment giving a principal you pass in (`inferenceUserPrincipalId`) the same role, so you can test locally
+  - **Azure Managed Redis** (Redis Enterprise, `Balanced_B0`, RediSearch enabled)
+  - **Azure AI Content Safety** (Cognitive Services account, kind `ContentSafety`, `S0`)
+  - **Application Insights** (workspace-based) + backing **Log Analytics workspace**
 
   > The APIM API import and AI-gateway policies are added live during the session — not in the template.
 
@@ -42,7 +46,7 @@ Each session branch has the matching starter code and walkthrough:
 
 ## Prerequisites
 
-- Azure subscription (rights to create APIM + AI Foundry), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and `gpt-4.1-mini` availability in your region.
+- Azure subscription (rights to create APIM + AI Foundry), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and `gpt-4.1-mini` + `text-embedding-ada-002` availability in your region.
 
 ## Deploy & run
 
