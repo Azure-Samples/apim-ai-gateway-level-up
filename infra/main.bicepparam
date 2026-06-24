@@ -9,3 +9,13 @@ param modelDeploymentName = 'gpt-4.1-mini'
 param modelName = 'gpt-4.1-mini'
 param modelVersion = '2025-04-14'
 param modelCapacity = 10
+
+param embeddingDeploymentName = 'text-embedding-ada-002'
+param embeddingModelName = 'text-embedding-ada-002'
+param embeddingModelVersion = '2'
+param embeddingModelCapacity = 10
+
+// Additional resources (Azure Managed Redis, Content Safety, Application Insights).
+param redisSkuName = 'Balanced_B0'
+param redisLocation = 'centralus'
+param contentSafetySkuName = 'S0'

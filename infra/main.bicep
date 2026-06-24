@@ -39,6 +39,18 @@ param modelVersion string = '2025-04-14'
 @description('Capacity (TPM in thousands) for the model deployment.')
 param modelCapacity int = 10
 
+@description('Name of the embedding model deployment.')
+param embeddingDeploymentName string = 'text-embedding-ada-002'
+
+@description('Embedding model name to deploy.')
+param embeddingModelName string = 'text-embedding-ada-002'
+
+@description('Embedding model version to deploy.')
+param embeddingModelVersion string = '2'
+
+@description('Capacity (TPM in thousands) for the embedding model deployment.')
+param embeddingModelCapacity int = 10
+
 @description('Object ID (principal) to grant "Cognitive Services OpenAI User" on the Foundry account, e.g. your user so you can test locally with DefaultAzureCredential. Leave empty to skip. Get yours with: az ad signed-in-user show --query id -o tsv')
 param inferenceUserPrincipalId string = ''
 
@@ -110,6 +122,26 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
       version: modelVersion
     }
   }
+}
+
+// text-embedding-ada-002 model deployment.
+resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+  parent: foundry
+  name: embeddingDeploymentName
+  sku: {
+    name: 'Standard'
+    capacity: embeddingModelCapacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: embeddingModelName
+      version: embeddingModelVersion
+    }
+  }
+  dependsOn: [
+    modelDeployment
+  ]
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -262,6 +294,9 @@ output foundryProjectName string = foundryProject.name
 @description('Deployed model deployment name.')
 output modelDeploymentName string = modelDeployment.name
 
+@description('Deployed embedding model deployment name.')
+output embeddingDeploymentName string = embeddingDeployment.name
+
 @description('API Management service name.')
 output apimName string = apim.name
 
@@ -270,3 +305,123 @@ output apimGatewayUrl string = apim.properties.gatewayUrl
 
 @description('FoundryPortal API endpoint on APIM (point the chat app here, with a subscription key).')
 output foundryApiUrl string = '${apim.properties.gatewayUrl}/${foundryApi.properties.path}'
+
+// ------------------------------------------------------------------------------------------------
+// Additional resources (additive — independent of APIM / Foundry above):
+//   - Log Analytics workspace + workspace-based Application Insights
+//   - Azure AI Content Safety (Cognitive Services account, kind = ContentSafety)
+//   - Azure Managed Redis (Redis Enterprise cluster + default DB with RediSearch)
+//
+// Modeled after the reference resources in subscription c6a8ee28-19ad-41b6-a129-4a6e1c15ef34
+// / RG apim-aoairg: apimaoaiappinsights, apimcs, apimredis.
+// ------------------------------------------------------------------------------------------------
+
+@description('Name of the Azure Managed Redis (Redis Enterprise) cluster.')
+param redisName string = '${namePrefix}-redis'
+
+@description('SKU for the Redis Enterprise cluster (e.g. Balanced_B0, MemoryOptimized_M10).')
+param redisSkuName string = 'Balanced_B0'
+
+@description('Azure region for the Redis Enterprise cluster (separate from `location` to work around capacity issues).')
+param redisLocation string = location
+
+@description('Name of the Azure AI Content Safety account.')
+param contentSafetyName string = '${namePrefix}-cs'
+
+@description('SKU for the Content Safety account.')
+param contentSafetySkuName string = 'S0'
+
+@description('Name of the Application Insights component.')
+param appInsightsName string = '${namePrefix}-appinsights'
+
+@description('Name of the Log Analytics workspace backing Application Insights.')
+param logAnalyticsWorkspaceName string = '${namePrefix}-law'
+
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+resource contentSafety 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
+  name: contentSafetyName
+  location: location
+  kind: 'ContentSafety'
+  sku: {
+    name: contentSafetySkuName
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    customSubDomainName: contentSafetyName
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource redis 'Microsoft.Cache/redisEnterprise@2024-10-01' = {
+  name: redisName
+  location: redisLocation
+  sku: {
+    name: redisSkuName
+  }
+}
+
+resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2024-10-01' = {
+  parent: redis
+  name: 'default'
+  properties: {
+    clientProtocol: 'Encrypted'
+    port: 10000
+    clusteringPolicy: 'EnterpriseCluster'
+    evictionPolicy: 'NoEviction'
+    accessKeysAuthentication: 'Enabled'
+    persistence: {
+      aofEnabled: false
+      rdbEnabled: false
+    }
+    modules: [
+      {
+        name: 'RediSearch'
+      }
+    ]
+  }
+}
+
+@description('Azure Managed Redis (Redis Enterprise) cluster name.')
+output redisName string = redis.name
+
+@description('Azure Managed Redis host name.')
+output redisHostName string = redis.properties.hostName
+
+@description('Azure AI Content Safety account name.')
+output contentSafetyName string = contentSafety.name
+
+@description('Azure AI Content Safety endpoint.')
+output contentSafetyEndpoint string = contentSafety.properties.endpoint
+
+@description('Application Insights component name.')
+output appInsightsName string = appInsights.name
+
+@description('Application Insights connection string.')
+output appInsightsConnectionString string = appInsights.properties.ConnectionString
+
+@description('Log Analytics workspace resource ID backing Application Insights.')
+output logAnalyticsWorkspaceId string = logAnalytics.id
