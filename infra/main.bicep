@@ -1,12 +1,14 @@
 // ------------------------------------------------------------------------------------------------
-// Session One starter infrastructure
+// Session Two starter infrastructure
 //   - Azure API Management (Standard V2) with system-assigned managed identity
 //   - Azure AI Foundry (Cognitive Services AIServices account) + Foundry project
 //   - gpt-4.1-mini model deployment
 //   - Role assignment: APIM managed identity -> "Cognitive Services OpenAI User" on the Foundry account
+//   - APIM "FoundryPortal" API (path /foundry) + foundry-backend + managed-identity routing policy
 //
-// NOTE: The APIM API definition and AI-gateway policies are intentionally NOT included here.
-//       Those are configured live during the session demo.
+// NOTE: Unlike Session One, the APIM API, backend, and AI-gateway routing policy ARE included here
+//       so Session Two starts with a working APIM -> Foundry gateway. Additional AI-gateway policies
+//       (token limits, semantic caching, content safety, etc.) are layered on during the session.
 // ------------------------------------------------------------------------------------------------
 
 targetScope = 'resourceGroup'
@@ -130,6 +132,96 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
 }
 
 // ------------------------------------------------------------------------------------------------
+// APIM backend -> Foundry (Cognitive Services data plane)
+//   Referenced by the API policy via <set-backend-service backend-id="foundry-backend" />.
+// ------------------------------------------------------------------------------------------------
+resource foundryBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  parent: apim
+  name: 'foundry-backend'
+  properties: {
+    protocol: 'http'
+    url: foundry.properties.endpoint
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// APIM API: FoundryPortal
+//   A subscription-key-protected API at path /foundry. Routing to the Foundry backend and
+//   managed-identity auth are handled entirely by the API-level policy (serviceUrl is null).
+//   A single catch-all POST operation (/*) forwards any Foundry data-plane path.
+// ------------------------------------------------------------------------------------------------
+resource foundryApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+  parent: apim
+  name: 'foundryportal'
+  properties: {
+    displayName: 'FoundryPortal'
+    path: 'foundry'
+    protocols: [
+      'https'
+    ]
+    subscriptionRequired: true
+    subscriptionKeyParameterNames: {
+      header: 'Ocp-Apim-Subscription-Key'
+      query: 'subscription-key'
+    }
+  }
+}
+
+resource foundryApiPostOperation 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  parent: foundryApi
+  name: 'postfoundry'
+  properties: {
+    displayName: 'PostFoundry'
+    method: 'POST'
+    urlTemplate: '/*'
+    request: {
+      queryParameters: [
+        {
+          name: 'api-version'
+          type: 'string'
+          values: [
+            '2024-10-21'
+          ]
+        }
+      ]
+      headers: [
+        {
+          name: 'Content-Type'
+          type: 'string'
+          values: [
+            'application/json'
+          ]
+        }
+      ]
+    }
+    responses: [
+      {
+        statusCode: 200
+      }
+    ]
+  }
+}
+
+// API-level policy applied across all operations: routes to foundry-backend and injects a
+// managed-identity bearer token for the Cognitive Services data plane.
+resource foundryApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+  parent: foundryApi
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: loadTextContent('policies/foundryportal.xml')
+  }
+  dependsOn: [
+    foundryBackend
+    foundryApiPostOperation
+  ]
+}
+
+// ------------------------------------------------------------------------------------------------
 // Role assignment: APIM managed identity -> Cognitive Services OpenAI User on the Foundry account
 // (Used during the live demo when APIM routes to the model using its managed identity.)
 // ------------------------------------------------------------------------------------------------
@@ -175,3 +267,6 @@ output apimName string = apim.name
 
 @description('API Management gateway URL (base for the APIM endpoint you will configure live).')
 output apimGatewayUrl string = apim.properties.gatewayUrl
+
+@description('FoundryPortal API endpoint on APIM (point the chat app here, with a subscription key).')
+output foundryApiUrl string = '${apim.properties.gatewayUrl}/${foundryApi.properties.path}'
