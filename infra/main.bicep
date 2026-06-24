@@ -163,9 +163,13 @@ resource foundryApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
     protocols: [
       'https'
     ]
-    // No subscription key required — the chat app calls the gateway directly and
-    // APIM authenticates to Foundry with its managed identity (see the API policy).
-    subscriptionRequired: false
+    // Subscription key is required — the chat app passes it as the
+    // Ocp-Apim-Subscription-Key header on each call to the gateway.
+    subscriptionRequired: true
+    subscriptionKeyParameterNames: {
+      header: 'Ocp-Apim-Subscription-Key'
+      query: 'subscription-key'
+    }
   }
 }
 

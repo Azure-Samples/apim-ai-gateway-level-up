@@ -41,6 +41,9 @@ app.MapPost("/api/check", async (CheckRequest request, IHttpClientFactory httpFa
         using var http = httpFactory.CreateClient();
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+        // When checking the APIM gateway (subscription required), pass the subscription key.
+        if (!string.IsNullOrWhiteSpace(request.SubscriptionKey))
+            req.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", request.SubscriptionKey);
         using var resp = await http.SendAsync(req);
 
         var status = (int)resp.StatusCode;
@@ -85,6 +88,14 @@ app.MapPost("/api/chat", async (ChatRequest request, ILogger<Program> logger) =>
         {
             RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(maxRetries: 0),
         };
+        // When the endpoint is the APIM gateway (subscription required), forward the
+        // subscription key as the Ocp-Apim-Subscription-Key header on every call.
+        if (!string.IsNullOrWhiteSpace(request.SubscriptionKey))
+        {
+            options.AddPolicy(
+                new SubscriptionKeyPolicy(request.SubscriptionKey),
+                System.ClientModel.Primitives.PipelinePosition.PerCall);
+        }
         var client = new AzureOpenAIClient(endpointUri, new DefaultAzureCredential(), options);
         ChatClient chatClient = client.GetChatClient(request.Deployment);
 
@@ -133,13 +144,39 @@ app.Run();
 record ChatConfig(string Endpoint, string Deployment);
 
 record CheckRequest(
-    [property: JsonPropertyName("endpoint")] string Endpoint);
+    [property: JsonPropertyName("endpoint")] string Endpoint,
+    [property: JsonPropertyName("subscriptionKey")] string? SubscriptionKey);
 
 record ChatRequest(
     [property: JsonPropertyName("endpoint")] string Endpoint,
     [property: JsonPropertyName("deployment")] string Deployment,
+    [property: JsonPropertyName("subscriptionKey")] string? SubscriptionKey,
     [property: JsonPropertyName("messages")] List<ChatMessageDto> Messages);
 
 record ChatMessageDto(
     [property: JsonPropertyName("role")] string Role,
     [property: JsonPropertyName("content")] string Content);
+
+// Adds the APIM subscription key header to each outgoing request when calling the gateway.
+sealed class SubscriptionKeyPolicy(string subscriptionKey) : System.ClientModel.Primitives.PipelinePolicy
+{
+    private const string HeaderName = "Ocp-Apim-Subscription-Key";
+
+    public override void Process(
+        System.ClientModel.Primitives.PipelineMessage message,
+        IReadOnlyList<System.ClientModel.Primitives.PipelinePolicy> pipeline,
+        int currentIndex)
+    {
+        message.Request.Headers.Set(HeaderName, subscriptionKey);
+        ProcessNext(message, pipeline, currentIndex);
+    }
+
+    public override ValueTask ProcessAsync(
+        System.ClientModel.Primitives.PipelineMessage message,
+        IReadOnlyList<System.ClientModel.Primitives.PipelinePolicy> pipeline,
+        int currentIndex)
+    {
+        message.Request.Headers.Set(HeaderName, subscriptionKey);
+        return ProcessNextAsync(message, pipeline, currentIndex);
+    }
+}

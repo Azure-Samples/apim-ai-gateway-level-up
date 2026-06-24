@@ -31,6 +31,9 @@
   <label for="deployment">Deployment</label>
   <input id="deployment" type="text" value="gpt-4.1-mini" />
 
+  <label for="subscriptionKey">Subscription key <small>(optional — required when calling the APIM gateway)</small></label>
+  <input id="subscriptionKey" type="password" placeholder="Ocp-Apim-Subscription-Key (leave blank for direct Foundry)" />
+
   <div class="row">
     <button id="check" type="button">Check access (debug)</button>
     <span id="checkResult"></span>
@@ -47,6 +50,7 @@
     const log = document.getElementById('log');
     const endpointEl = document.getElementById('endpoint');
     const deploymentEl = document.getElementById('deployment');
+    const subscriptionKeyEl = document.getElementById('subscriptionKey');
     const messageEl = document.getElementById('message');
     const sendBtn = document.getElementById('send');
     const checkBtn = document.getElementById('check');
@@ -81,6 +85,7 @@
           body: JSON.stringify({
             endpoint: endpointEl.value.trim(),
             deployment: deploymentEl.value.trim(),
+            subscriptionKey: subscriptionKeyEl.value.trim(),
             messages: history
           })
         });
@@ -111,7 +116,7 @@
         const res = await fetch('/api/check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: endpointEl.value.trim() })
+          body: JSON.stringify({ endpoint: endpointEl.value.trim(), subscriptionKey: subscriptionKeyEl.value.trim() })
         });
         const data = await res.json();
         checkResult.textContent = `HTTP ${data.status} — ${data.message}`;
