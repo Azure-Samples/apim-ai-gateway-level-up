@@ -164,10 +164,10 @@ resource foundryApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
       'https'
     ]
     // Subscription key is required — the chat app passes it as the
-    // Ocp-Apim-Subscription-Key header on each call to the gateway.
+    // api-key header on each call to the gateway.
     subscriptionRequired: true
     subscriptionKeyParameterNames: {
-      header: 'Ocp-Apim-Subscription-Key'
+      header: 'api-key'
       query: 'subscription-key'
     }
   }

@@ -43,7 +43,7 @@ app.MapPost("/api/check", async (CheckRequest request, IHttpClientFactory httpFa
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
         // When checking the APIM gateway (subscription required), pass the subscription key.
         if (!string.IsNullOrWhiteSpace(request.SubscriptionKey))
-            req.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", request.SubscriptionKey);
+            req.Headers.TryAddWithoutValidation("api-key", request.SubscriptionKey);
         using var resp = await http.SendAsync(req);
 
         var status = (int)resp.StatusCode;
@@ -89,7 +89,7 @@ app.MapPost("/api/chat", async (ChatRequest request, ILogger<Program> logger) =>
             RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(maxRetries: 0),
         };
         // When the endpoint is the APIM gateway (subscription required), forward the
-        // subscription key as the Ocp-Apim-Subscription-Key header on every call.
+        // subscription key as the api-key header on every call.
         if (!string.IsNullOrWhiteSpace(request.SubscriptionKey))
         {
             options.AddPolicy(
@@ -160,7 +160,7 @@ record ChatMessageDto(
 // Adds the APIM subscription key header to each outgoing request when calling the gateway.
 sealed class SubscriptionKeyPolicy(string subscriptionKey) : System.ClientModel.Primitives.PipelinePolicy
 {
-    private const string HeaderName = "Ocp-Apim-Subscription-Key";
+    private const string HeaderName = "api-key";
 
     public override void Process(
         System.ClientModel.Primitives.PipelineMessage message,
