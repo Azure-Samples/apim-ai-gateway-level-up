@@ -62,11 +62,26 @@ param inferenceUserPrincipalId string = ''
 ])
 param inferenceUserPrincipalType string = 'User'
 
+// ---- Additional resources (Azure Managed Redis, Azure AI Content Safety, Application Insights) ----
+
+@description('SKU for the Redis Enterprise cluster (e.g. Balanced_B0, MemoryOptimized_M10).')
+param redisSkuName string = 'Balanced_B0'
+
+@description('Azure region for the Redis Enterprise cluster (separate from `location` to work around capacity issues).')
+param redisLocation string = location
+
+@description('SKU for the Content Safety account.')
+param contentSafetySkuName string = 'S0'
+
 // Stable, unique-ish suffix for globally-scoped names.
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var foundryAccountName = '${namePrefix}-foundry-${uniqueSuffix}'
 var foundryProjectName = '${namePrefix}-project'
 var apimServiceName = '${namePrefix}-apim-${uniqueSuffix}'
+var contentSafetyName = '${namePrefix}-cs-${uniqueSuffix}'
+var appInsightsName = '${namePrefix}-appinsights-${uniqueSuffix}'
+var logAnalyticsWorkspaceName = '${namePrefix}-law-${uniqueSuffix}'
+var redisName = '${namePrefix}-redis-${uniqueSuffix}'
 
 // "Cognitive Services OpenAI User" built-in role.
 var openAiUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
@@ -280,33 +295,6 @@ resource userFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
 }
 
 // ------------------------------------------------------------------------------------------------
-// Outputs
-// ------------------------------------------------------------------------------------------------
-@description('Foundry account endpoint (use this directly, or swap to the APIM URL in the app).')
-output foundryEndpoint string = foundry.properties.endpoint
-
-@description('Foundry account name.')
-output foundryAccountName string = foundry.name
-
-@description('Foundry project name.')
-output foundryProjectName string = foundryProject.name
-
-@description('Deployed model deployment name.')
-output modelDeploymentName string = modelDeployment.name
-
-@description('Deployed embedding model deployment name.')
-output embeddingDeploymentName string = embeddingDeployment.name
-
-@description('API Management service name.')
-output apimName string = apim.name
-
-@description('API Management gateway URL (base for the APIM endpoint you will configure live).')
-output apimGatewayUrl string = apim.properties.gatewayUrl
-
-@description('FoundryPortal API endpoint on APIM (point the chat app here, with a subscription key).')
-output foundryApiUrl string = '${apim.properties.gatewayUrl}/${foundryApi.properties.path}'
-
-// ------------------------------------------------------------------------------------------------
 // Additional resources (additive — independent of APIM / Foundry above):
 //   - Log Analytics workspace + workspace-based Application Insights
 //   - Azure AI Content Safety (Cognitive Services account, kind = ContentSafety)
@@ -315,28 +303,6 @@ output foundryApiUrl string = '${apim.properties.gatewayUrl}/${foundryApi.proper
 // Modeled after the reference resources in subscription c6a8ee28-19ad-41b6-a129-4a6e1c15ef34
 // / RG apim-aoairg: apimaoaiappinsights, apimcs, apimredis.
 // ------------------------------------------------------------------------------------------------
-
-@description('Name of the Azure Managed Redis (Redis Enterprise) cluster.')
-param redisName string = '${namePrefix}-redis'
-
-@description('SKU for the Redis Enterprise cluster (e.g. Balanced_B0, MemoryOptimized_M10).')
-param redisSkuName string = 'Balanced_B0'
-
-@description('Azure region for the Redis Enterprise cluster (separate from `location` to work around capacity issues).')
-param redisLocation string = location
-
-@description('Name of the Azure AI Content Safety account.')
-param contentSafetyName string = '${namePrefix}-cs'
-
-@description('SKU for the Content Safety account.')
-param contentSafetySkuName string = 'S0'
-
-@description('Name of the Application Insights component.')
-param appInsightsName string = '${namePrefix}-appinsights'
-
-@description('Name of the Log Analytics workspace backing Application Insights.')
-param logAnalyticsWorkspaceName string = '${namePrefix}-law'
-
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsWorkspaceName
   location: location
@@ -404,6 +370,33 @@ resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2024-10-01' = 
     ]
   }
 }
+
+// ------------------------------------------------------------------------------------------------
+// Outputs
+// ------------------------------------------------------------------------------------------------
+@description('Foundry account endpoint (use this directly, or swap to the APIM URL in the app).')
+output foundryEndpoint string = foundry.properties.endpoint
+
+@description('Foundry account name.')
+output foundryAccountName string = foundry.name
+
+@description('Foundry project name.')
+output foundryProjectName string = foundryProject.name
+
+@description('Deployed model deployment name.')
+output modelDeploymentName string = modelDeployment.name
+
+@description('Deployed embedding model deployment name.')
+output embeddingDeploymentName string = embeddingDeployment.name
+
+@description('API Management service name.')
+output apimName string = apim.name
+
+@description('API Management gateway URL (base for the APIM endpoint you will configure live).')
+output apimGatewayUrl string = apim.properties.gatewayUrl
+
+@description('FoundryPortal API endpoint on APIM (point the chat app here, with a subscription key).')
+output foundryApiUrl string = '${apim.properties.gatewayUrl}/${foundryApi.properties.path}'
 
 @description('Azure Managed Redis (Redis Enterprise) cluster name.')
 output redisName string = redis.name
