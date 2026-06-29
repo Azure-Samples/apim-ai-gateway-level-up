@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Session One Chat</title>
+  <title>AI Gateway Chat</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
     h1 { font-size: 1.3rem; }
@@ -13,118 +13,415 @@
     .row input { flex: 1; }
     button { padding: 0.5rem 1rem; font-size: 0.95rem; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: default; }
-    #log { margin-top: 1rem; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem; min-height: 200px; }
+    .log { margin-top: 1rem; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem;
+           height: 320px; overflow-y: auto; }
     .msg { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-radius: 6px; white-space: pre-wrap; }
     .user { background: #e7f0ff; }
     .assistant { background: #f0f0f0; }
     .error { color: #b00020; }
     small { color: #666; }
+    /* Tabs */
+    .tabs { display: flex; gap: 0.25rem; border-bottom: 2px solid #ccc; margin-top: 1rem; }
+    .tab { padding: 0.5rem 1rem; border: 1px solid #ccc; border-bottom: none; border-radius: 6px 6px 0 0;
+           background: #f5f5f5; cursor: pointer; font-weight: 600; }
+    .tab.active { background: #fff; border-color: #888; position: relative; top: 2px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .tab-desc { background: #f5f8ff; border: 1px solid #d6e2ff; border-left: 4px solid #4a7dff;
+                border-radius: 6px; padding: 0.6rem 0.8rem; margin: 1rem 0; font-size: 0.9rem; line-height: 1.4; }
+    .tab-desc strong { color: #234; }
+    .tab-desc code { background: #e9eefb; padding: 0 0.25rem; border-radius: 3px; }
   </style>
 </head>
 <body>
-  <h1>Session One – Foundry Chat</h1>
-  <p><small>Set the endpoint below. Use the Foundry endpoint now, then swap it for your APIM gateway URL during the demo.</small></p>
+  <h1>AI Gateway – Chat</h1>
+  <p><small>Four ways to reach your models, each on its own tab. Tabs <strong>1</strong> &amp; <strong>2</strong>
+    call a model endpoint directly using two different API styles; tab <strong>3</strong> uses
+    <code>AIProjectClient</code> + the project's Responses API; tab <strong>4</strong> uses a Foundry prompt
+    agent. Point any endpoint at your APIM gateway URL (or, on tabs 3 &amp; 4, use a BYOM
+    <code>&lt;connection&gt;/&lt;model&gt;</code> model) to route traffic through the gateway.</small></p>
 
-  <label for="endpoint">Endpoint</label>
-  <input id="endpoint" type="text" placeholder="https://your-foundry.openai.azure.com/ (or your APIM URL)" />
-
-  <label for="deployment">Deployment</label>
-  <input id="deployment" type="text" value="gpt-4.1-mini" />
-
-  <div class="row">
-    <button id="check" type="button">Check access (debug)</button>
-    <span id="checkResult"></span>
+  <div class="tabs">
+    <div class="tab active" data-tab="openai">OpenAI</div>
+    <div class="tab" data-tab="foundry">Foundry</div>
+    <div class="tab" data-tab="project">Project client</div>
+    <div class="tab" data-tab="agent">Agent (BYOM)</div>
   </div>
 
-  <div id="log"></div>
+  <!-- OpenAI tab -->
+  <section id="panel-openai" class="panel active">
+    <div class="tab-desc">
+      <strong>Classic Azure OpenAI API.</strong> Calls the model with the well-established Azure OpenAI
+      surface — <code>/openai/deployments/&lt;deployment&gt;/chat/completions</code> — where the
+      <em>deployment</em> name lives in the URL. This is what most existing apps use today. Use the
+      <strong>Deployment</strong> field below, and swap the endpoint for your APIM gateway URL to see the
+      gateway in action.
+    </div>
 
-  <div class="row">
-    <input id="message" type="text" placeholder="Type a message..." />
-    <button id="send">Send</button>
-  </div>
+    <label for="oa-endpoint">Endpoint</label>
+    <input id="oa-endpoint" type="text" placeholder="https://your-foundry.openai.azure.com/ (or your APIM URL)" />
+
+    <label for="oa-deployment">Deployment</label>
+    <input id="oa-deployment" type="text" value="gpt-4.1-mini" />
+
+    <label for="oa-key">Subscription key <small>(optional — required when calling the APIM gateway)</small></label>
+    <input id="oa-key" type="password" placeholder="api-key (leave blank for direct Foundry)" />
+
+    <div class="row">
+      <button id="oa-check" type="button">Check access (debug)</button>
+      <span id="oa-checkResult"></span>
+    </div>
+
+    <div id="oa-log" class="log"></div>
+
+    <div class="row">
+      <input id="oa-message" type="text" placeholder="Type a message..." />
+      <button id="oa-send">Send</button>
+    </div>
+  </section>
+
+  <!-- Foundry tab -->
+  <section id="panel-foundry" class="panel">
+    <div class="tab-desc">
+      <strong>Newer Azure AI model-inference API.</strong> Calls the same kind of model through the unified
+      Foundry inference surface — <code>/models/chat/completions</code> — where the <em>model</em> name goes
+      in the request body (not the URL). It's one route that works across many model types, not just OpenAI.
+      Use the <strong>Model</strong> field below; the app appends <code>/models</code> automatically. Swap the
+      endpoint for your APIM gateway URL to route through the gateway.
+    </div>
+
+    <label for="fd-endpoint">Endpoint <small>(direct host or APIM gateway path; <code>/models</code> is appended automatically)</small></label>
+    <input id="fd-endpoint" type="text" placeholder="https://your-foundry.services.ai.azure.com/ (or your APIM URL)" />
+
+    <label for="fd-model">Model</label>
+    <input id="fd-model" type="text" value="gpt-4.1-mini" />
+
+    <label for="fd-key">Subscription key <small>(optional — required when calling the APIM gateway)</small></label>
+    <input id="fd-key" type="password" placeholder="api-key (leave blank for direct Foundry)" />
+
+    <div class="row">
+      <button id="fd-check" type="button">Check access (debug)</button>
+      <span id="fd-checkResult"></span>
+    </div>
+
+    <div id="fd-log" class="log"></div>
+
+    <div class="row">
+      <input id="fd-message" type="text" placeholder="Type a message..." />
+      <button id="fd-send">Send</button>
+    </div>
+  </section>
+
+  <!-- Agent (BYOM) tab -->
+  <section id="panel-agent" class="panel">
+    <div class="tab-desc">
+      <strong>Agent-based access for bring-your-own-model (BYOM).</strong> Unlike the other two tabs, this
+      doesn't call a model endpoint directly. It creates a Foundry <em>prompt agent</em> and chats with it
+      through the <strong>project endpoint</strong> + Responses API. This is the <em>only</em> path that can
+      use an admin-connected BYOM model (<code>&lt;connection-name&gt;/&lt;model-name&gt;</code>), and a
+      successful reply proves the project endpoint routes inference through your APIM gateway on the backend
+      (watch APIM analytics). Create an agent, chat, then delete it when done.
+    </div>
+
+    <label for="ag-endpoint">Project endpoint</label>
+    <input id="ag-endpoint" type="text"
+      placeholder="https://your-foundry.services.ai.azure.com/api/projects/your-project" />
+
+    <label for="ag-model">Model deployment name <small>(<code>&lt;connection-name&gt;/&lt;model-name&gt;</code>)</small></label>
+    <input id="ag-model" type="text" placeholder="my-apim-connection/gpt-4.1-mini" />
+
+    <label for="ag-name">Agent name</label>
+    <input id="ag-name" type="text" value="byom-test-agent" />
+
+    <label for="ag-instructions">Instructions <small>(system prompt)</small></label>
+    <input id="ag-instructions" type="text" value="You are a helpful assistant." />
+
+    <div class="row">
+      <button id="ag-create" type="button">Create agent</button>
+      <button id="ag-delete" type="button" disabled>Delete agent</button>
+      <span id="ag-status"></span>
+    </div>
+
+    <div id="ag-log" class="log"></div>
+
+    <div class="row">
+      <input id="ag-message" type="text" placeholder="Type a message..." disabled />
+      <button id="ag-send" disabled>Send</button>
+    </div>
+  </section>
+
+  <!-- Project client tab -->
+  <section id="panel-project" class="panel">
+    <div class="tab-desc">
+      <strong>Project <code>Responses API</code> (via <code>AIProjectClient</code>).</strong> You supply only
+      the <strong>project endpoint</strong>; chat goes through the project's OpenAI-compatible Responses API.
+      Set <strong>Model</strong> to a plain deployment name for a <em>direct</em> call, or to a BYOM
+      <code>&lt;connection-name&gt;/&lt;model-name&gt;</code> to route the response <strong>through your APIM
+      gateway</strong> — no agent needed (watch APIM analytics). <em>Check access</em> confirms the project
+      is reachable.
+    </div>
+
+    <label for="pj-endpoint">Project endpoint</label>
+    <input id="pj-endpoint" type="text"
+      placeholder="https://your-foundry.services.ai.azure.com/api/projects/your-project" />
+
+    <label for="pj-deployment">Model <small>(plain deployment, or BYOM <code>&lt;connection&gt;/&lt;model&gt;</code> to route via APIM)</small></label>
+    <input id="pj-deployment" type="text" value="gpt-4.1-mini" />
+
+    <div class="row">
+      <button id="pj-check" type="button">Check access (debug)</button>
+      <span id="pj-checkResult"></span>
+    </div>
+
+    <div id="pj-log" class="log"></div>
+
+    <div class="row">
+      <input id="pj-message" type="text" placeholder="Type a message..." />
+      <button id="pj-send">Send</button>
+    </div>
+  </section>
 
   <script>
-    const log = document.getElementById('log');
-    const endpointEl = document.getElementById('endpoint');
-    const deploymentEl = document.getElementById('deployment');
-    const messageEl = document.getElementById('message');
-    const sendBtn = document.getElementById('send');
-    const checkBtn = document.getElementById('check');
-    const checkResult = document.getElementById('checkResult');
-    const history = [];
+    // --- Tab switching ---
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
 
-    // Pre-fill from server config (appsettings.json), if provided.
-    fetch('/api/config').then(r => r.json()).then(c => {
-      if (c.endpoint) endpointEl.value = c.endpoint;
-      if (c.deployment) deploymentEl.value = c.deployment;
-    }).catch(() => {});
+    // --- Generic chat controller, reused per tab ---
+    function createChat(opts) {
+      const logEl = document.getElementById(opts.log);
+      const messageEl = document.getElementById(opts.message);
+      const sendBtn = document.getElementById(opts.send);
+      const checkBtn = document.getElementById(opts.check);
+      const checkResult = document.getElementById(opts.checkResult);
+      const history = [];
 
-    function append(role, text) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'error');
-      div.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'Assistant: ' : '') + text;
-      log.appendChild(div);
-      log.scrollTop = log.scrollHeight;
-    }
+      function append(role, text) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'error');
+        div.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'Assistant: ' : '') + text;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
 
-    async function send() {
-      const content = messageEl.value.trim();
-      if (!content) return;
-      append('user', content);
-      history.push({ role: 'user', content });
-      messageEl.value = '';
-      sendBtn.disabled = true;
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: endpointEl.value.trim(),
-            deployment: deploymentEl.value.trim(),
-            messages: history
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          append('error', 'Error: ' + (err.error || err.detail || res.statusText));
-        } else {
-          const data = await res.json();
-          append('assistant', data.reply);
-          history.push({ role: 'assistant', content: data.reply });
+      async function send() {
+        const content = messageEl.value.trim();
+        if (!content) return;
+        append('user', content);
+        history.push({ role: 'user', content });
+        messageEl.value = '';
+        sendBtn.disabled = true;
+        try {
+          const res = await fetch(opts.chatPath, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign(opts.buildBody(), { messages: history }))
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            append('error', 'Error: ' + (err.error || err.detail || res.statusText));
+          } else {
+            const data = await res.json();
+            append('assistant', data.reply);
+            history.push({ role: 'assistant', content: data.reply });
+          }
+        } catch (e) {
+          append('error', 'Error: ' + e.message);
+        } finally {
+          sendBtn.disabled = false;
+          messageEl.focus();
         }
-      } catch (e) {
-        append('error', 'Error: ' + e.message);
-      } finally {
-        sendBtn.disabled = false;
-        messageEl.focus();
       }
+
+      async function checkAccess() {
+        checkResult.textContent = 'Checking...';
+        checkResult.style.color = '#666';
+        checkBtn.disabled = true;
+        try {
+          const res = await fetch(opts.checkPath, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(opts.buildCheckBody())
+          });
+          const data = await res.json();
+          checkResult.textContent = `HTTP ${data.status} — ${data.message}`;
+          checkResult.style.color = data.ready ? '#0a7d28' : '#b00020';
+        } catch (e) {
+          checkResult.textContent = 'Error: ' + e.message;
+          checkResult.style.color = '#b00020';
+        } finally {
+          checkBtn.disabled = false;
+        }
+      }
+
+      sendBtn.addEventListener('click', send);
+      messageEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+      checkBtn.addEventListener('click', checkAccess);
     }
 
-    sendBtn.addEventListener('click', send);
-    messageEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    // --- OpenAI tab wiring ---
+    const oaEndpoint = document.getElementById('oa-endpoint');
+    const oaDeployment = document.getElementById('oa-deployment');
+    const oaKey = document.getElementById('oa-key');
+    createChat({
+      log: 'oa-log', message: 'oa-message', send: 'oa-send',
+      check: 'oa-check', checkResult: 'oa-checkResult',
+      chatPath: '/api/chat', checkPath: '/api/check',
+      buildBody: () => ({
+        endpoint: oaEndpoint.value.trim(),
+        deployment: oaDeployment.value.trim(),
+        subscriptionKey: oaKey.value.trim()
+      }),
+      buildCheckBody: () => ({ endpoint: oaEndpoint.value.trim(), subscriptionKey: oaKey.value.trim() })
+    });
 
-    async function checkAccess() {
-      checkResult.textContent = 'Checking...';
-      checkResult.style.color = '#666';
-      checkBtn.disabled = true;
-      try {
-        const res = await fetch('/api/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: endpointEl.value.trim() })
-        });
-        const data = await res.json();
-        checkResult.textContent = `HTTP ${data.status} — ${data.message}`;
-        checkResult.style.color = data.ready ? '#0a7d28' : '#b00020';
-      } catch (e) {
-        checkResult.textContent = 'Error: ' + e.message;
-        checkResult.style.color = '#b00020';
-      } finally {
-        checkBtn.disabled = false;
+    // --- Foundry tab wiring ---
+    const fdEndpoint = document.getElementById('fd-endpoint');
+    const fdModel = document.getElementById('fd-model');
+    const fdKey = document.getElementById('fd-key');
+    createChat({
+      log: 'fd-log', message: 'fd-message', send: 'fd-send',
+      check: 'fd-check', checkResult: 'fd-checkResult',
+      chatPath: '/api/chat-foundry', checkPath: '/api/check-foundry',
+      buildBody: () => ({
+        endpoint: fdEndpoint.value.trim(),
+        model: fdModel.value.trim(),
+        subscriptionKey: fdKey.value.trim()
+      }),
+      buildCheckBody: () => ({ endpoint: fdEndpoint.value.trim(), subscriptionKey: fdKey.value.trim() })
+    });
+
+    // --- Project client tab wiring ---
+    const pjEndpoint = document.getElementById('pj-endpoint');
+    const pjDeployment = document.getElementById('pj-deployment');
+    createChat({
+      log: 'pj-log', message: 'pj-message', send: 'pj-send',
+      check: 'pj-check', checkResult: 'pj-checkResult',
+      chatPath: '/api/chat-project', checkPath: '/api/check-project',
+      buildBody: () => ({
+        endpoint: pjEndpoint.value.trim(),
+        deployment: pjDeployment.value.trim()
+      }),
+      buildCheckBody: () => ({ endpoint: pjEndpoint.value.trim() })
+    });
+
+    // --- Agent (BYOM) tab wiring ---
+    (function () {
+      const endpointEl = document.getElementById('ag-endpoint');
+      const modelEl = document.getElementById('ag-model');
+      const nameEl = document.getElementById('ag-name');
+      const instructionsEl = document.getElementById('ag-instructions');
+      const createBtn = document.getElementById('ag-create');
+      const deleteBtn = document.getElementById('ag-delete');
+      const statusEl = document.getElementById('ag-status');
+      const logEl = document.getElementById('ag-log');
+      const messageEl = document.getElementById('ag-message');
+      const sendBtn = document.getElementById('ag-send');
+
+      let agentName = null, version = null, conversationId = null;
+
+      function append(role, text) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'error');
+        div.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'Assistant: ' : '') + text;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
       }
-    }
 
-    checkBtn.addEventListener('click', checkAccess);
+      function setStatus(text, ok) {
+        statusEl.textContent = text;
+        statusEl.style.color = ok === undefined ? '#666' : ok ? '#0a7d28' : '#b00020';
+      }
+
+      function setActive(active) {
+        messageEl.disabled = !active;
+        sendBtn.disabled = !active;
+        deleteBtn.disabled = !active;
+        createBtn.disabled = active;
+      }
+
+      async function createAgent() {
+        const endpoint = endpointEl.value.trim();
+        const model = modelEl.value.trim();
+        const name = nameEl.value.trim();
+        if (!endpoint || !model || !name) { setStatus('Endpoint, model and agent name are required.', false); return; }
+        setStatus('Creating...', undefined);
+        createBtn.disabled = true;
+        try {
+          const res = await fetch('/api/foundry-agent/create', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint, agentName: name, model, instructions: instructionsEl.value.trim() })
+          });
+          const data = await res.json();
+          if (!res.ok) { setStatus('Error: ' + (data.error || data.detail || res.statusText), false); createBtn.disabled = false; return; }
+          agentName = data.name; version = data.version; conversationId = null;
+          setStatus(`Agent "${agentName}" v${version} created (${data.status || 'active'}).`, true);
+          append('assistant', `Agent ready. Send a message to route it through the gateway.`);
+          setActive(true);
+          messageEl.focus();
+        } catch (e) {
+          setStatus('Error: ' + e.message, false); createBtn.disabled = false;
+        }
+      }
+
+      async function deleteAgent() {
+        if (!agentName) return;
+        setStatus('Deleting...', undefined);
+        deleteBtn.disabled = true; sendBtn.disabled = true;
+        try {
+          const res = await fetch('/api/foundry-agent/delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: endpointEl.value.trim(), agentName, version, conversationId })
+          });
+          const data = await res.json();
+          if (!res.ok) { setStatus('Error: ' + (data.error || data.detail || res.statusText), false); deleteBtn.disabled = false; sendBtn.disabled = false; return; }
+          append('assistant', `Agent "${agentName}" deleted.`);
+          agentName = null; version = null; conversationId = null;
+          setActive(false);
+          setStatus('Agent deleted.', true);
+        } catch (e) {
+          setStatus('Error: ' + e.message, false); deleteBtn.disabled = false; sendBtn.disabled = false;
+        }
+      }
+
+      async function send() {
+        const content = messageEl.value.trim();
+        if (!content || !agentName) return;
+        append('user', content);
+        messageEl.value = '';
+        sendBtn.disabled = true;
+        try {
+          const res = await fetch('/api/foundry-agent/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: endpointEl.value.trim(), agentName, conversationId, message: content })
+          });
+          const data = await res.json();
+          if (!res.ok) { append('error', 'Error: ' + (data.error || data.detail || res.statusText)); }
+          else { conversationId = data.conversationId; append('assistant', data.reply); }
+        } catch (e) {
+          append('error', 'Error: ' + e.message);
+        } finally {
+          sendBtn.disabled = !agentName;
+          messageEl.focus();
+        }
+      }
+
+      createBtn.addEventListener('click', createAgent);
+      deleteBtn.addEventListener('click', deleteAgent);
+      sendBtn.addEventListener('click', send);
+      messageEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    })();
+
+    // Pre-fill endpoint/deployment from server config (appsettings.json), if provided.
+    fetch('/api/config').then(r => r.json()).then(c => {
+      if (c.endpoint) oaEndpoint.value = c.endpoint;
+      if (c.deployment) { oaDeployment.value = c.deployment; fdModel.value = c.deployment; pjDeployment.value = c.deployment; }
+    }).catch(() => {});
   </script>
 </body>
 </html>
