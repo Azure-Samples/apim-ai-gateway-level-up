@@ -86,6 +86,8 @@ var redisName = '${namePrefix}-redis-${uniqueSuffix}'
 
 // "Cognitive Services OpenAI User" built-in role.
 var openAiUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+// "Cognitive Services User" built-in role (used for the Content Safety data plane).
+var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
 
 // ------------------------------------------------------------------------------------------------
 // Azure AI Foundry account (Cognitive Services, kind = AIServices)
@@ -283,6 +285,19 @@ resource apimFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
   }
 }
 
+// Additional role assignment: Cognitive Services User on the Foundry account.
+// Required for the Foundry AI Inference API (paths under /models/*, e.g. /models/chat/completions,
+// /models/embeddings) — the "OpenAI User" role only covers the classic /openai/deployments/* paths.
+resource apimFoundryInferenceRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: foundry
+  name: guid(foundry.id, apim.id, cognitiveServicesUserRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesUserRoleId)
+    principalId: apim.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Optional role assignment: a user/group/SP you pass in -> Cognitive Services OpenAI User
 // on the Foundry account, so you can test the chat app locally with DefaultAzureCredential.
 resource userFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(inferenceUserPrincipalId)) {
@@ -369,6 +384,165 @@ resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2024-10-01' = 
         name: 'RediSearch'
       }
     ]
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// AI-gateway backends and external cache used by the aigwlvlup-foundry API policy
+//   (llm-emit-token-metric, llm-token-limit, llm-semantic-cache-lookup/store, llm-content-safety)
+// ------------------------------------------------------------------------------------------------
+
+// Foundry AI endpoint backend (services.ai.azure.com root). Authenticates to
+// Cognitive Services with APIM's system-assigned managed identity.
+resource foundryAiEndpointBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  parent: apim
+  name: 'aigwlvlup-foundry-ai-endpoint'
+  properties: {
+    protocol: 'http'
+    url: foundry.properties.endpoint
+    resourceId: '${environment().resourceManager}${foundry.id}'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+    credentials: {
+      managedIdentity: {
+        resource: 'https://cognitiveservices.azure.com/'
+      }
+    }
+  }
+}
+
+// Embedding backend used by llm-semantic-cache-lookup (embeddings-backend-auth="system-assigned"
+// on the policy handles the MI token, so no credentials are set on the backend itself).
+resource embeddingBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  parent: apim
+  name: 'embedding-backend'
+  properties: {
+    description: 'Embedding model'
+    protocol: 'http'
+    url: '${foundry.properties.endpoint}openai/deployments/${embeddingDeployment.name}/embeddings'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+  }
+}
+
+// Content Safety backend used by llm-content-safety. Authenticates with APIM's MI.
+resource contentSafetyBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  parent: apim
+  name: 'content-safety-backend'
+  properties: {
+    protocol: 'http'
+    url: contentSafety.properties.endpoint
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+    credentials: {
+      managedIdentity: {
+        resource: 'https://cognitiveservices.azure.com'
+      }
+    }
+  }
+}
+
+// External cache — Azure Managed Redis, used by llm-semantic-cache-lookup/store.
+// The connection string embeds the Redis primary access key retrieved via listKeys().
+resource apimExternalCache 'Microsoft.ApiManagement/service/caches@2024-05-01' = {
+  parent: apim
+  name: 'default'
+  properties: {
+    description: 'AI Gateway external cache'
+    useFromLocation: 'default'
+    connectionString: '${redis.properties.hostName}:10000,password=${redisDatabase.listKeys().primaryKey},ssl=True,abortConnect=False'
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// APIM API: aigwlvlup-foundry (path /foundrygateway)
+//   Mirrors the portal-imported Foundry API. Subscription-key required. All AI-gateway policies
+//   (token limit, emit-token-metric, semantic cache, content safety) are applied via the policy
+//   XML file loaded below.
+// ------------------------------------------------------------------------------------------------
+resource aigwFoundryApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+  parent: apim
+  name: 'aigwlvlup-foundry'
+  properties: {
+    displayName: 'aigwlvlup-foundry'
+    path: 'foundrygateway'
+    protocols: [
+      'https'
+    ]
+    subscriptionRequired: true
+    subscriptionKeyParameterNames: {
+      header: 'api-key'
+      query: 'subscription-key'
+    }
+    // Import all operations from the Foundry OpenAPI spec (chat completions, embeddings,
+    // image generations, image embeddings, model info, Anthropic messages).
+    format: 'openapi'
+    value: loadTextContent('policies/aigwlvlup-foundry.openapi.yaml')
+  }
+}
+
+resource aigwFoundryApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+  parent: aigwFoundryApi
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: loadTextContent('policies/aigwlvlup-foundry.xml')
+  }
+  dependsOn: [
+    foundryAiEndpointBackend
+    embeddingBackend
+    contentSafetyBackend
+    apimExternalCache
+  ]
+}
+
+// Role assignment: APIM MI -> Cognitive Services User on the Content Safety account
+// (required so llm-content-safety can call the Content Safety data plane with MI).
+resource apimContentSafetyRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: contentSafety
+  name: guid(contentSafety.id, apim.id, cognitiveServicesUserRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesUserRoleId)
+    principalId: apim.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Application Insights integration for APIM
+//   - Logger: wires APIM to the App Insights component (required by llm-emit-token-metric so
+//     custom token metrics land in App Insights).
+//   - Diagnostic: emits gateway request/response telemetry for the aigwlvlup-foundry API.
+// ------------------------------------------------------------------------------------------------
+resource apimAppInsightsLogger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
+  parent: apim
+  name: appInsights.name
+  properties: {
+    loggerType: 'applicationInsights'
+    description: 'Application Insights logger for AI-gateway metrics'
+    resourceId: appInsights.id
+    credentials: {
+      instrumentationKey: appInsights.properties.InstrumentationKey
+    }
+  }
+}
+
+resource aigwFoundryApiDiagnostic 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
+  parent: aigwFoundryApi
+  name: 'applicationinsights'
+  properties: {
+    loggerId: apimAppInsightsLogger.id
+    alwaysLog: 'allErrors'
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 100
+    }
   }
 }
 

@@ -1,0 +1,43 @@
+<!--
+    AI Gateway policy for the Foundry API (path: /foundrygateway).
+    Layered policies (order matters):
+      1. Route to the Foundry AI endpoint backend (MI-authenticated by the backend).
+      2. Emit per-call token metrics to Application Insights (dimensioned by Subscription ID).
+      3. Cap tokens-per-minute per subscription (returns 429 when exceeded).
+      4. Semantic cache lookup against the embedding backend, keyed by subscription.
+      5. Content Safety prompt shield — blocks unsafe prompts before they reach the model.
+    Outbound: store the response in the semantic cache for reuse.
+-->
+<policies>
+	<inbound>
+		<base />
+		<set-backend-service id="apim-generated-policy" backend-id="aigwlvlup-foundry-ai-endpoint" />
+		<llm-emit-token-metric>
+			<dimension name="Subscription ID" />
+		</llm-emit-token-metric>
+		<llm-token-limit remaining-tokens-header-name="remaining-tokens" tokens-per-minute="100" counter-key="@(context.Subscription.Id)" estimate-prompt-tokens="true" tokens-consumed-header-name="consumed-tokens" />
+		<!--Semantic cache lookup-->
+		<llm-semantic-cache-lookup embeddings-backend-auth="system-assigned" embeddings-backend-id="embedding-backend" score-threshold="0.05">
+			<vary-by>@(context.Subscription.Id)</vary-by>
+		</llm-semantic-cache-lookup>
+		<llm-content-safety backend-id="content-safety-backend" shield-prompt="true">
+			<categories output-type="EightSeverityLevels">
+				<category name="Hate" threshold="4" />
+				<category name="Violence" threshold="4" />
+				<category name="SelfHarm" threshold="4" />
+				<category name="Sexual" threshold="4" />
+			</categories>
+		</llm-content-safety>
+	</inbound>
+	<backend>
+		<base />
+	</backend>
+	<outbound>
+		<base />
+		<!--Semantic cache store-->
+		<llm-semantic-cache-store duration="60" />
+	</outbound>
+	<on-error>
+		<base />
+	</on-error>
+</policies>
