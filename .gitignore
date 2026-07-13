@@ -19,6 +19,7 @@ crash.log
 
 # Bicep build output
 *.json.bicep.out
+infra/main.json
 
 # OS / editor
 .DS_Store
@@ -26,5 +27,14 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Office temp/lock files
+~$*
+
 # Logs
 *.log
+
+# .NET build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
