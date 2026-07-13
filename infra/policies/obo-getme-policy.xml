@@ -1,0 +1,62 @@
+<policies>
+    <inbound>
+        <base />
+        <!-- 1) Extract the incoming user access token (the 'assertion' for OBO) -->
+        <set-variable name="incoming_access_token" value="@(context.Request.Headers.GetValueOrDefault("Authorization", "").Replace("Bearer ", ""))" />
+        <!-- 2) Prepare OBO token request to Microsoft Entra ID -->
+        <set-variable name="obo_body" value="@{
+                var form =
+                $"client_id={{obo-client-id}}" +
+                $"&amp;client_secret={System.Uri.EscapeDataString("{{obo-client-secret}}")}" +
+                $"&amp;grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" +
+                $"&amp;requested_token_use=on_behalf_of" +
+                $"&amp;scope={System.Uri.EscapeDataString("User.Read")}" +
+                $"&amp;assertion={System.Uri.EscapeDataString((string)context.Variables["incoming_access_token"])}";
+                return form;
+            }" />
+        <!-- 3) Exchange the token (OBO) -->
+        <send-request ignore-error="false" timeout="30" response-variable-name="obo_token_resp">
+            <set-url>https://login.microsoftonline.com/{{entraid-tenant}}/oauth2/v2.0/token</set-url>
+            <set-method>POST</set-method>
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/x-www-form-urlencoded</value>
+            </set-header>
+            <set-body>@((string)context.Variables["obo_body"])</set-body>
+        </send-request>
+        <!-- 4) Parse OBO response and fail fast on error -->
+        <choose>
+            <when condition="@(!(context.Variables.ContainsKey("obo_token_resp")))">
+                <return-response>
+                    <set-status code="502" reason="Bad Gateway" />
+                    <set-body>{"error":"token_exchange_failed","error_description":"No response from token endpoint"}</set-body>
+                </return-response>
+            </when>
+        </choose>
+        <set-variable name="obo_json" value="@{
+                var resp = (IResponse)context.Variables["obo_token_resp"];
+                return resp.Body.As&lt;JObject&gt;(preserveContent: true);
+            }" />
+        <choose>
+            <when condition="@(((JObject)context.Variables["obo_json"]).GetValue("access_token") == null)">
+                <return-response>
+                    <set-status code="401" reason="Unauthorized" />
+                    <set-body>@(((JObject)context.Variables["obo_json"]).ToString())</set-body>
+                </return-response>
+            </when>
+        </choose>
+        <!-- 5) Set downstream Authorization header with the OBO token -->
+        <set-variable name="downstream_access_token" value="@(((JObject)context.Variables["obo_json"]).Value&lt;string&gt;("access_token"))" />
+        <set-header name="Authorization" exists-action="override">
+            <value>@($"Bearer {context.Variables["downstream_access_token"]}")</value>
+        </set-header>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

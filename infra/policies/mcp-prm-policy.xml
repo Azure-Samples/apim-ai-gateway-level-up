@@ -1,0 +1,44 @@
+<!--
+    Protected Resource Metadata (RFC 9728) policy.
+    Returns PRM JSON for OAuth 2.0 resource discovery.
+    Dynamically builds the resource URL from the wildcard path parameter.
+    Anonymous access — no authentication required.
+-->
+<policies>
+    <inbound>
+        <return-response>
+            <set-status code="200" reason="OK" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-header name="Cache-Control" exists-action="override">
+                <value>public, max-age=3600</value>
+            </set-header>
+            <set-body>@{
+                var mcpPath = context.Request.MatchedParameters["mcpPath"];
+                var gatewayUrl = "{{APIMGatewayURL}}";
+                return JsonConvert.SerializeObject(new {
+                    resource = $"{gatewayUrl}/{mcpPath}",
+                    authorization_servers = new[] {
+                        $"https://login.microsoftonline.com/{{entraid-tenant}}/v2.0"
+                    },
+                    bearer_methods_supported = new[] {
+                        "header"
+                    },
+                    scopes_supported = new[] {
+                        "api://{{obo-client-id}}/access_mcp"
+                    }
+                });
+            }</set-body>
+        </return-response>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

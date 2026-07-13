@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "FOUNDRY_ENDPOINT": "https://<your-foundry-name>.openai.azure.com",
+    "MODEL_DEPLOYMENT": "gpt-4.1-mini"
+  }
+}

@@ -74,6 +74,25 @@ param redisLocation string = location
 @description('SKU for the Content Safety account.')
 param contentSafetySkuName string = 'S0'
 
+// ------------------------------------------------------------------------------------------------
+// Session 4 (MCP + OBO) parameters
+//   The MCP "expose-as-MCP" resources (Function App + MCP APIs on APIM) are only deployed when
+//   oboClientId is provided, because they depend on two Entra app registrations you create first
+//   (see hol/walkthrough.md). Leave these empty to deploy the base gateway without the MCP surface.
+// ------------------------------------------------------------------------------------------------
+@description('Microsoft Entra tenant ID used for MCP token validation and OBO exchange. Leave empty to skip MCP resources.')
+param entraIdTenantId string = ''
+
+@description('Client ID of the middle-tier (backend API) app registration used for OBO. Leave empty to skip MCP resources.')
+param oboClientId string = ''
+
+@secure()
+@description('Client secret of the middle-tier app registration used for OBO.')
+param oboClientSecret string = ''
+
+@description('Audience validated on inbound MCP tokens — the Application ID URI of the backend API app (e.g. api://<obo-client-id>).')
+param mcpClientAudience string = ''
+
 // Stable, unique-ish suffix for globally-scoped names.
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var foundryAccountName = '${namePrefix}-foundry-${uniqueSuffix}'
@@ -83,6 +102,9 @@ var contentSafetyName = '${namePrefix}-cs-${uniqueSuffix}'
 var appInsightsName = '${namePrefix}-appinsights-${uniqueSuffix}'
 var logAnalyticsWorkspaceName = '${namePrefix}-law-${uniqueSuffix}'
 var redisName = '${namePrefix}-redis-${uniqueSuffix}'
+
+// Only stand up the MCP "expose-as-MCP" surface once the OBO app registration exists.
+var deployMcp = !empty(oboClientId)
 
 // "Cognitive Services OpenAI User" built-in role.
 var openAiUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
@@ -547,6 +569,57 @@ resource aigwFoundryApiDiagnostic 'Microsoft.ApiManagement/service/apis/diagnost
 }
 
 // ------------------------------------------------------------------------------------------------
+// Session 4: MCP "expose-as-MCP" pattern (Function App backend + MCP APIs on APIM)
+//   Gated on deployMcp so the base gateway still deploys without the Entra app registrations.
+// ------------------------------------------------------------------------------------------------
+module mcpFunctionApp './modules/mcp-functionapp.bicep' = if (deployMcp) {
+  name: 'mcp-functionapp'
+  params: {
+    location: location
+    namePrefix: namePrefix
+    uniqueSuffix: uniqueSuffix
+  }
+}
+
+module mcpApimApis './modules/mcp-apim-apis.bicep' = if (deployMcp) {
+  name: 'mcp-apim-apis'
+  params: {
+    apimName: apim.name
+    functionAppDefaultHostname: mcpFunctionApp!.outputs.functionAppDefaultHostname
+    entraIdTenantId: entraIdTenantId
+    oboClientId: oboClientId
+    oboClientSecret: oboClientSecret
+    mcpClientAudience: mcpClientAudience
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Session 4: A2A "Summarizer" agent (Function App backed by the Foundry model)
+//   Always deployed with Session 4. Imported into APIM as an A2A Agent API live in the portal.
+// ------------------------------------------------------------------------------------------------
+module a2aAgent './modules/a2a-agent.bicep' = {
+  name: 'a2a-agent'
+  params: {
+    location: location
+    namePrefix: namePrefix
+    uniqueSuffix: uniqueSuffix
+    foundryEndpoint: foundry.properties.endpoint
+    modelDeploymentName: modelDeploymentName
+  }
+}
+
+// Let the agent's identity call the Foundry model keyless.
+resource a2aFoundryRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundry.id, 'a2a-agent', openAiUserRoleId)
+  scope: foundry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', openAiUserRoleId)
+    principalId: a2aAgent.outputs.identityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
 // Outputs
 // ------------------------------------------------------------------------------------------------
 @description('Foundry account endpoint (use this directly, or swap to the APIM URL in the app).')
@@ -593,3 +666,15 @@ output appInsightsConnectionString string = appInsights.properties.ConnectionStr
 
 @description('Log Analytics workspace resource ID backing Application Insights.')
 output logAnalyticsWorkspaceId string = logAnalytics.id
+
+@description('MCP Function App name (empty when MCP resources are not deployed). Deploy code here with: func azure functionapp publish <name>.')
+output mcpFunctionAppName string = deployMcp ? mcpFunctionApp!.outputs.functionAppName : ''
+
+@description('MCP server endpoint on APIM to add to your MCP client (empty when MCP resources are not deployed).')
+output mcpServerUrl string = deployMcp ? '${apim.properties.gatewayUrl}/obo-mcp-server/mcp' : ''
+
+@description('A2A agent Function App name. Deploy code here with: func azure functionapp publish <name> --dotnet-isolated.')
+output a2aAgentFunctionAppName string = a2aAgent.outputs.functionAppName
+
+@description('A2A agent card URL to import into APIM as an A2A Agent API.')
+output a2aAgentCardUrl string = 'https://${a2aAgent.outputs.functionAppDefaultHostname}/.well-known/agent-card.json'

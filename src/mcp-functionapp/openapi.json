@@ -1,0 +1,150 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "OBO MCP Server API",
+    "description": "Azure Function App API with Echo and GetMe (Graph API) endpoints, fronted by APIM as an MCP server.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/echo": {
+      "get": {
+        "operationId": "echo",
+        "summary": "Echo a parameter back",
+        "description": "Takes a name parameter and echoes it back in the response.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "The name to echo back. Defaults to 'World' if not provided.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "World"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful echo response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EchoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Get current user profile from Microsoft Graph",
+        "description": "Retrieves the authenticated user's profile from Microsoft Graph API /me endpoint. Requires a valid Bearer token in the Authorization header (provided via APIM OBO token exchange).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile from Microsoft Graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphUserProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Bearer token with access_mcp scope. APIM performs OBO exchange for Graph API access."
+      }
+    },
+    "schemas": {
+      "EchoResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Echo: World"
+          }
+        }
+      },
+      "GraphUserProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the user"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "The name displayed in the address book for the user"
+          },
+          "givenName": {
+            "type": "string",
+            "description": "The given name (first name) of the user"
+          },
+          "surname": {
+            "type": "string",
+            "description": "The user's surname (family name or last name)"
+          },
+          "mail": {
+            "type": "string",
+            "description": "The SMTP address for the user"
+          },
+          "userPrincipalName": {
+            "type": "string",
+            "description": "The user principal name (UPN) of the user"
+          },
+          "jobTitle": {
+            "type": "string",
+            "description": "The user's job title"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "error_description": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

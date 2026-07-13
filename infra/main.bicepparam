@@ -22,3 +22,15 @@ param embeddingModelCapacity = 10
 param redisSkuName = 'Balanced_B0'
 param redisLocation = 'canadacentral'
 param contentSafetySkuName = 'S0'
+
+// Session 4 (MCP + OBO). Leave these empty to deploy the base gateway only.
+// To deploy the MCP "expose-as-MCP" surface, first create the two Entra app
+// registrations (see hol/walkthrough.md), then set these — ideally on the CLI so
+// the secret is never committed:
+//   az deployment group create ... \
+//     --parameters entraIdTenantId=<tenant-id> oboClientId=<app2-client-id> \
+//                  oboClientSecret=<app2-secret> mcpClientAudience=api://<app2-client-id>
+param entraIdTenantId = ''
+param oboClientId = ''
+param oboClientSecret = ''
+param mcpClientAudience = ''

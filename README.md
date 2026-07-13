@@ -23,7 +23,7 @@ Each session branch has the matching starter code and walkthrough:
 | [Session 1](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-one) | APIM intro, APIM AI abilities, and AI Foundry |
 | [Session 2](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-two) | Focusing on AI Gateway policies + demo |
 | [Session 3](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-three) | MCP + A2A |
-| [Session 4](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-four) | Learning / customer use cases |
+| [Session 4](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-four) | MCP + A2A hands-on / demo + customer use cases |
 | [Session 5](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-five) | New AI Gateway |
 | [Session 6](https://github.com/Azure-Samples/apim-ai-gateway-level-up/tree/session-six) | API Center |
 
@@ -44,9 +44,14 @@ Each session branch has the matching starter code and walkthrough:
 
 - **[`src/chatapp/`](./src/chatapp)** — a minimal **.NET 10** app (Minimal API + one static page) that chats with the model via the **`Azure.AI.OpenAI`** SDK and **`DefaultAzureCredential`** (no keys). The page has an **editable endpoint field** so you can switch from the Foundry URL to the APIM URL without code changes, plus a **Check access (debug)** button that calls `/openai/models` to confirm your identity has data-plane access.
 
+- **[`src/mcp-functionapp/`](./src/mcp-functionapp)** — a minimal **.NET 8 isolated** Azure Function App (`GET /echo`, `GET /me`) used in **Session 4** to demo APIM as an **MCP server**. `infra/main.bicep` optionally provisions the Function App and the MCP APIs (an MCP-type API exposing the operations as tools, an OAuth Protected Resource Metadata endpoint, and an On-Behalf-Of token-exchange policy) when you pass the session-4 parameters. See **[`hol/walkthrough.md`](./hol/walkthrough.md)** for the full walkthrough, which also covers fronting an existing external MCP server (the Microsoft Learn MCP server) as a governed passthrough.
+
+- **[`src/a2a-agent/`](./src/a2a-agent)** — a minimal **.NET 8 isolated** Azure Function App implementing a small **A2A "Summarizer" agent** (serves an Agent Card at `/.well-known/agent-card.json` and a JSON-RPC `message/send` endpoint at `/a2a`, backed by the Foundry model via managed identity). Used in **Session 4** to demo importing an agent into APIM as an **A2A Agent API**. `infra/main.bicep` provisions the agent Function App as part of the Session 4 deploy; the APIM import is a portal step covered in **[`hol/walkthrough.md`](./hol/walkthrough.md)**.
+
 ## Prerequisites
 
 - Azure subscription (rights to create APIM + AI Foundry), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and `gpt-4.1-mini` + `text-embedding-ada-002` availability in your region.
+- For **Session 4 (MCP)** you also need the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local) to build and publish the Function App.
 
 ## Deploy & run
 
