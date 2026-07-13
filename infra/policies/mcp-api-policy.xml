@@ -1,0 +1,38 @@
+<!--
+    API-level policy for the MCP Server API.
+    Validates Azure AD JWT tokens on inbound requests.
+    Returns 401 with WWW-Authenticate header pointing to PRM endpoint on failure.
+-->
+<policies>
+    <inbound>
+        <base />
+        <validate-azure-ad-token tenant-id="{{entraid-tenant}}" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
+            <audiences>
+                <audience>{{mcp-client-audience}}</audience>
+            </audiences>
+        </validate-azure-ad-token>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+        <choose>
+            <when condition="@(context.Response.StatusCode == 401)">
+                <return-response>
+                    <set-status code="401" reason="Unauthorized" />
+                    <set-header name="WWW-Authenticate" exists-action="override">
+                        <value>@{
+                            var gatewayUrl = "{{APIMGatewayURL}}";
+                            var apiPath = context.Api.Path.TrimStart('/');
+                            return "Bearer error=\"invalid_token\", resource_metadata=\"" + gatewayUrl + "/.well-known/oauth-protected-resource/" + apiPath + "/mcp\"";
+                        }</value>
+                    </set-header>
+                </return-response>
+            </when>
+        </choose>
+    </on-error>
+</policies>
