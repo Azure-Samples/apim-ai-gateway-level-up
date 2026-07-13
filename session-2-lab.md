@@ -1,4 +1,3 @@
-
  # Session Two Lab: Add token limits, telemetry, semantic caching, and content safety to your Foundry API in APIM
 
  This lab walks you through layering AI Gateway capabilities onto the Microsoft Foundry API you imported into Azure API Management (APIM):
@@ -208,3 +207,4 @@
      <llm-semantic-cache-store duration="60" />
  </outbound>
  ```
+ ---
