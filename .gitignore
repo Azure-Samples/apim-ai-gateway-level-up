@@ -19,7 +19,6 @@ crash.log
 
 # Bicep build output
 *.json.bicep.out
-infra/main.json
 
 # OS / editor
 .DS_Store
