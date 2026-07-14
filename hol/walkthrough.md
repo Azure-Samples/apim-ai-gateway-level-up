@@ -29,7 +29,7 @@ Pattern 3 (A2A agent)
                                        │  mediates agent card, rate-limits, OTel agent traces
 ```
 
-> To test the MCP servers you build in this lab, use **VS Code with GitHub Copilot (agent mode)** or the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector). The A2A agent can be tested with `curl` or any A2A client.
+> To test the MCP servers you build in this lab, use **VS Code with GitHub Copilot (agent mode)** — it performs the OAuth sign-in and token handling for you. The A2A agent can be tested with `curl` or any A2A client.
 
 Throughout, replace angle-bracket placeholders (e.g. `<your-apim-name>`, `<tenant-id>`) with values from your deployment.
 
@@ -45,14 +45,14 @@ The OBO flow needs a **client app** (used by the MCP client to sign the user in)
 
 1. In the [Azure Portal](https://portal.azure.com): **Microsoft Entra ID → App registrations → New registration**.
 2. Name it `mcp-client`, leave the redirect URI blank, and **Register**.
-3. Note the **Application (client) ID** — the MCP client uses this.
-4. **Authentication → Advanced settings → Allow public client flows → Yes** (needed for interactive/device-code flows). If you'll use the `scripts/get-token.sh` helper, also add a redirect URI of type **Mobile and desktop applications**: `http://localhost:3456`.
+3. Note the **Application (client) ID** — you'll add this to **App 2**'s *Authorized client applications* below.
+4. **Authentication → Advanced settings → Allow public client flows → Yes** (VS Code signs in as a public client via PKCE).
 5. No client secret is needed for this app.
 
 #### App 2 — Backend API app (OBO middle-tier)
 
 1. Register a new app `mcp-backend-api`.
-2. Note its **Application (client) ID** → this is your `oboClientId`.
+2. Note its **Application (client) ID** → this is your `oboClientId`, referred to below as `<mcp-backend-client-id>`.
 3. **Expose an API:**
    - Set the **Application ID URI** to `api://<oboClientId>` → this is your `mcpClientAudience`.
    - Add a scope named `access_mcp` (display name e.g. "Access MCP Server"), consent **Admins and users**.
@@ -73,9 +73,9 @@ az deployment group create \
   --parameters infra/main.bicepparam \
   --parameters apimPublisherEmail=you@example.com \
                entraIdTenantId=<tenant-id> \
-               oboClientId=<app2-client-id> \
-               oboClientSecret=<app2-client-secret> \
-               mcpClientAudience=api://<app2-client-id>
+               oboClientId=<mcp-backend-client-id> \
+               oboClientSecret=<mcp-backend-secret> \
+               mcpClientAudience=api://<mcp-backend-client-id>
 ```
 
 Everything else (location, `namePrefix`, model deployment, Redis, Content Safety, App Insights) comes from `infra/main.bicepparam`, so you only spell out the sensitive values above.
@@ -126,13 +126,7 @@ Three policy files (in `infra/policies/`) implement the security model:
 
 ### 5. Test the MCP server
 
-Get an `access_mcp` token for a signed-in user (interactive browser login via PKCE):
-
-```bash
-./scripts/get-token.sh <app1-client-id> <tenant-id> api://<app2-client-id>/access_mcp
-```
-
-Add the MCP server in **VS Code** (GitHub Copilot agent mode):
+Add the MCP server in **VS Code** (GitHub Copilot agent mode). On first use VS Code follows the `WWW-Authenticate` → PRM discovery flow, prompts you to sign in with Entra, and attaches the `access_mcp` token automatically — no manual token step needed:
 
 1. Command Palette → **MCP: Add Server** → **HTTP (HTTP or Server Sent Events)**.
 2. Server URL: `https://<your-apim-name>.azure-api.net/obo-mcp-server/mcp`
@@ -142,8 +136,6 @@ Then, in Copilot agent mode, invoke the tools:
 
 - `echo` — returns `Echo: <name>`.
 - `getMe` — triggers the OBO exchange and returns your Microsoft Graph profile.
-
-You can also drive it with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) (use version 0.9.0), supplying the token from `get-token.sh` as a Bearer token.
 
 ---
 
