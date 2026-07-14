@@ -12,7 +12,7 @@ the protocol agents use to call tools.
 This lab covers **three complementary patterns** for fronting agent infrastructure with Azure API Management (APIM), the same AI Gateway you used in Sessions 1 and 2 — two for **MCP** (the protocol agents use to call *tools*) and one for **A2A** (the protocol agents use to talk to *other agents*):
 
 1. **Expose-as-MCP** — take a REST API managed in APIM and expose its operations as **MCP tools**, secured with **Microsoft Entra** (OAuth 2.0 Protected Resource Metadata + On-Behalf-Of token exchange). You'll deploy a small **.NET 8 Function App** with two endpoints — `GET /echo` (pass-through) and `GET /me` (calls Microsoft Graph `/me` using an OBO token) — and front it as an MCP server.
-2. **Passthrough-MCP** — put APIM in front of an **existing external MCP server** (the public **Microsoft Learn MCP server**) so you can apply gateway policies (rate limiting, tracing, auth) to a third-party MCP server you don't own.
+2. **Passthrough-MCP** — put APIM in front of an **existing external MCP server** (the public **DeepWiki MCP server**) so you can apply gateway policies (rate limiting, tracing, auth) to a third-party MCP server you don't own.
 3. **A2A agent** — deploy a small **.NET 8 "Summarizer" agent** (serves an Agent Card + a JSON-RPC `message/send` endpoint, backed by the Foundry model) and import it into APIM as an **A2A Agent API**. APIM mediates the agent card and governs agent-to-agent traffic.
 
 ```
@@ -22,7 +22,7 @@ Pattern 1 (expose-as-MCP)
                                               └─ /.well-known/oauth-protected-resource (PRM)
 
 Pattern 2 (passthrough-MCP)
-  MCP Client ──► APIM (MCP server) ──(policies: rate-limit, trace)──► https://learn.microsoft.com/api/mcp
+  MCP Client ──► APIM (MCP server) ──(policies: rate-limit, trace)──► https://mcp.deepwiki.com/mcp
 
 Pattern 3 (A2A agent)
   A2A Client ──(subscription key)──► APIM (A2A Agent API) ──► Agent (Function App) ──► Foundry model
@@ -141,21 +141,21 @@ Then, in Copilot agent mode, invoke the tools:
 
 ## Pattern 2 — Govern an existing external MCP server (passthrough)
 
-APIM can front an **existing** remote MCP server and apply gateway policies to it. Here you'll proxy the public **Microsoft Learn MCP server** (`https://learn.microsoft.com/api/mcp`), which requires no auth and uses streamable HTTP. This is configured live in the portal (it targets an external server, so there's nothing to deploy).
+APIM can front an **existing** remote MCP server and apply gateway policies to it. Here you'll proxy the public **DeepWiki MCP server** (`https://mcp.deepwiki.com/mcp`), which requires no auth, uses streamable HTTP, and answers questions about any public GitHub repository. This is configured live in the portal (it targets an external server, so there's nothing to deploy).
 
-> The external MCP server must conform to MCP version `2025-06-18` or later — the Learn MCP server does.
+> The external MCP server must conform to MCP version `2025-06-18` or later — the DeepWiki MCP server does.
 
 ### 1. Create the passthrough MCP server
 
 1. APIM → **APIs → MCP servers → + Create MCP server**.
 2. Select **Expose an existing MCP server**.
 3. **Backend MCP server:**
-   - **MCP server base URL:** `https://learn.microsoft.com/api/mcp`
+   - **MCP server base URL:** `https://mcp.deepwiki.com/mcp`
    - **Transport type:** **Streamable HTTP** (default).
 4. **New MCP server:**
-   - **Name:** `learn-mcp`
-   - **Base path:** `learn` (this becomes the route prefix).
-5. **Create.** APIM imports the remote server's tools (e.g. `microsoft_docs_search`) and lists it with a **Server URL** like `https://<your-apim-name>.azure-api.net/learn-mcp/mcp`.
+   - **Name:** `deepwiki-mcp`
+   - **Base path:** `deepwiki` (this becomes the route prefix).
+5. **Create.** APIM imports the remote server's tools (e.g. `ask_question`, `read_wiki_structure`, `read_wiki_contents`) and lists it with a **Server URL** like `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp`.
 
 ### 2. Add a governance policy
 
@@ -167,8 +167,8 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
     <rate-limit-by-key calls="5" renewal-period="30"
         counter-key="@(context.Request.IpAddress)"
         remaining-calls-variable-name="remainingCallsPerIP" />
-    <trace source="learn-mcp" severity="information">
-        <message>Learn MCP tool call</message>
+    <trace source="deepwiki-mcp" severity="information">
+        <message>DeepWiki MCP tool call</message>
         <metadata name="agent-id" value="@(context.Request.Headers.GetValueOrDefault("agent-id", "n/a"))" />
     </trace>
 </inbound>
@@ -178,7 +178,7 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
 
 ### 3. Test the passthrough
 
-Add `https://<your-apim-name>.azure-api.net/learn-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot a docs question that triggers `microsoft_docs_search`; the 6th call within 30 seconds from the same IP should be rate-limited by APIM.
+Add `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot a question about a public GitHub repo (e.g. *"Using deepwiki, how does routing work in the `vercel/next.js` repo?"*) that triggers `ask_question`; the 6th call within 30 seconds from the same IP should be rate-limited by APIM.
 
 ---
 
