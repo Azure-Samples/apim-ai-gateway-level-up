@@ -164,7 +164,7 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
 ```xml
 <inbound>
     <base />
-    <rate-limit-by-key calls="5" renewal-period="30"
+    <rate-limit-by-key calls="2" renewal-period="300"
         counter-key="@(context.Request.IpAddress)"
         remaining-calls-variable-name="remainingCallsPerIP" />
     <trace source="deepwiki-mcp" severity="information">
@@ -176,9 +176,11 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
 
 > **Caution:** don't read `context.Response.Body` in MCP server policies — it forces response buffering and breaks the streaming MCP servers require.
 
+> **Why these numbers?** `rate-limit-by-key` enforcement is **approximate**, not an exact gate on call N+1. The gateway counts per worker and reconciles the shared counter on a short delay, so a burst can slip through roughly **2× the limit** before `429`s appear. Agent tool calls also arrive slowly (~20–40 s apart, since each call waits for the model's answer), so a short window lets earlier calls age out before the count accumulates. A low `calls` with a long `renewal-period` (300 s is the max) keeps the spaced-out calls counted together, so the limit trips reliably through normal chat — here, around the 3rd–4th call.
+
 ### 3. Test the passthrough
 
-Add `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot a question about a public GitHub repo (e.g. *"Using deepwiki, how does routing work in the `vercel/next.js` repo?"*) that triggers `ask_question`; the 6th call within 30 seconds from the same IP should be rate-limited by APIM.
+Add `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot several questions about a public GitHub repo (e.g. *"Using deepwiki, how does routing work in the `vercel/next.js` repo?"*) that trigger `ask_question`. With `calls=2` over a 5-minute window, the request that crosses the limit (around the 3rd–4th call from the same IP) is rejected by APIM and surfaces as a failed tool call in Copilot. In App Insights the blocked request shows up as a failed request rather than a `200`.
 
 ---
 
@@ -248,7 +250,7 @@ A2A responses are JSON-RPC (not OpenAI-shaped), so `llm-emit-token-metric` doesn
   ```xml
   <inbound>
       <base />
-      <rate-limit-by-key calls="10" renewal-period="60"
+      <rate-limit-by-key calls="2" renewal-period="300"
           counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)"
           remaining-calls-variable-name="remaining" />
       <trace source="summarizer-agent" severity="information">
@@ -256,6 +258,8 @@ A2A responses are JSON-RPC (not OpenAI-shaped), so `llm-emit-token-metric` doesn
       </trace>
   </inbound>
   ```
+
+  > **Note:** `rate-limit-by-key` enforcement is approximate and A2A calls are slow (each `message/send` waits on the model), so — as with Pattern 2 — a low `calls` with a long `renewal-period` (300 s max) is needed to trip the limit reliably. With `calls=2` the block lands around the 3rd–4th call. To trip a higher limit instead, fire the test calls in parallel (a `for … & wait` curl burst) so they land inside the window before the shared counter reconciles.
 
 ### 5. Test through APIM
 
