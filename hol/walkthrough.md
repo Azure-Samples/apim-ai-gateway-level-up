@@ -12,7 +12,7 @@ the protocol agents use to call tools.
 This lab covers **three complementary patterns** for fronting agent infrastructure with Azure API Management (APIM), the same AI Gateway you used in Sessions 1 and 2 — two for **MCP** (the protocol agents use to call *tools*) and one for **A2A** (the protocol agents use to talk to *other agents*):
 
 1. **Expose-as-MCP** — take a REST API managed in APIM and expose its operations as **MCP tools**, secured with **Microsoft Entra** (OAuth 2.0 Protected Resource Metadata + On-Behalf-Of token exchange). You'll deploy a small **.NET 8 Function App** with two endpoints — `GET /echo` (pass-through) and `GET /me` (calls Microsoft Graph `/me` using an OBO token) — and front it as an MCP server.
-2. **Passthrough-MCP** — put APIM in front of an **existing external MCP server** (the public **Microsoft Learn MCP server**) so you can apply gateway policies (rate limiting, tracing, auth) to a third-party MCP server you don't own.
+2. **Passthrough-MCP** — put APIM in front of an **existing external MCP server** (the public **DeepWiki MCP server**) so you can apply gateway policies (rate limiting, tracing, auth) to a third-party MCP server you don't own.
 3. **A2A agent** — deploy a small **.NET 8 "Summarizer" agent** (serves an Agent Card + a JSON-RPC `message/send` endpoint, backed by the Foundry model) and import it into APIM as an **A2A Agent API**. APIM mediates the agent card and governs agent-to-agent traffic.
 
 ```
@@ -22,14 +22,14 @@ Pattern 1 (expose-as-MCP)
                                               └─ /.well-known/oauth-protected-resource (PRM)
 
 Pattern 2 (passthrough-MCP)
-  MCP Client ──► APIM (MCP server) ──(policies: rate-limit, trace)──► https://learn.microsoft.com/api/mcp
+  MCP Client ──► APIM (MCP server) ──(policies: rate-limit, trace)──► https://mcp.deepwiki.com/mcp
 
 Pattern 3 (A2A agent)
   A2A Client ──(subscription key)──► APIM (A2A Agent API) ──► Agent (Function App) ──► Foundry model
                                        │  mediates agent card, rate-limits, OTel agent traces
 ```
 
-> To test the MCP servers you build in this lab, use **VS Code with GitHub Copilot (agent mode)** or the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector). The A2A agent can be tested with `curl` or any A2A client.
+> To test the MCP servers you build in this lab, use **VS Code with GitHub Copilot (agent mode)** — it performs the OAuth sign-in and token handling for you. The A2A agent can be tested with `curl` or any A2A client.
 
 Throughout, replace angle-bracket placeholders (e.g. `<your-apim-name>`, `<tenant-id>`) with values from your deployment.
 
@@ -45,14 +45,14 @@ The OBO flow needs a **client app** (used by the MCP client to sign the user in)
 
 1. In the [Azure Portal](https://portal.azure.com): **Microsoft Entra ID → App registrations → New registration**.
 2. Name it `mcp-client`, leave the redirect URI blank, and **Register**.
-3. Note the **Application (client) ID** — the MCP client uses this.
-4. **Authentication → Advanced settings → Allow public client flows → Yes** (needed for interactive/device-code flows). If you'll use the `scripts/get-token.sh` helper, also add a redirect URI of type **Mobile and desktop applications**: `http://localhost:3456`.
+3. Note the **Application (client) ID** — you'll add this to **App 2**'s *Authorized client applications* below.
+4. **Authentication → Advanced settings → Allow public client flows → Yes** (VS Code signs in as a public client via PKCE).
 5. No client secret is needed for this app.
 
 #### App 2 — Backend API app (OBO middle-tier)
 
 1. Register a new app `mcp-backend-api`.
-2. Note its **Application (client) ID** → this is your `oboClientId`.
+2. Note its **Application (client) ID** → this is your `oboClientId`, referred to below as `<mcp-backend-client-id>`.
 3. **Expose an API:**
    - Set the **Application ID URI** to `api://<oboClientId>` → this is your `mcpClientAudience`.
    - Add a scope named `access_mcp` (display name e.g. "Access MCP Server"), consent **Admins and users**.
@@ -73,9 +73,9 @@ az deployment group create \
   --parameters infra/main.bicepparam \
   --parameters apimPublisherEmail=you@example.com \
                entraIdTenantId=<tenant-id> \
-               oboClientId=<app2-client-id> \
-               oboClientSecret=<app2-client-secret> \
-               mcpClientAudience=api://<app2-client-id>
+               oboClientId=<mcp-backend-client-id> \
+               oboClientSecret=<mcp-backend-secret> \
+               mcpClientAudience=api://<mcp-backend-client-id>
 ```
 
 Everything else (location, `namePrefix`, model deployment, Redis, Content Safety, App Insights) comes from `infra/main.bicepparam`, so you only spell out the sensitive values above.
@@ -126,13 +126,7 @@ Three policy files (in `infra/policies/`) implement the security model:
 
 ### 5. Test the MCP server
 
-Get an `access_mcp` token for a signed-in user (interactive browser login via PKCE):
-
-```bash
-./scripts/get-token.sh <app1-client-id> <tenant-id> api://<app2-client-id>/access_mcp
-```
-
-Add the MCP server in **VS Code** (GitHub Copilot agent mode):
+Add the MCP server in **VS Code** (GitHub Copilot agent mode). On first use VS Code follows the `WWW-Authenticate` → PRM discovery flow, prompts you to sign in with Entra, and attaches the `access_mcp` token automatically — no manual token step needed:
 
 1. Command Palette → **MCP: Add Server** → **HTTP (HTTP or Server Sent Events)**.
 2. Server URL: `https://<your-apim-name>.azure-api.net/obo-mcp-server/mcp`
@@ -143,27 +137,25 @@ Then, in Copilot agent mode, invoke the tools:
 - `echo` — returns `Echo: <name>`.
 - `getMe` — triggers the OBO exchange and returns your Microsoft Graph profile.
 
-You can also drive it with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) (use version 0.9.0), supplying the token from `get-token.sh` as a Bearer token.
-
 ---
 
 ## Pattern 2 — Govern an existing external MCP server (passthrough)
 
-APIM can front an **existing** remote MCP server and apply gateway policies to it. Here you'll proxy the public **Microsoft Learn MCP server** (`https://learn.microsoft.com/api/mcp`), which requires no auth and uses streamable HTTP. This is configured live in the portal (it targets an external server, so there's nothing to deploy).
+APIM can front an **existing** remote MCP server and apply gateway policies to it. Here you'll proxy the public **DeepWiki MCP server** (`https://mcp.deepwiki.com/mcp`), which requires no auth, uses streamable HTTP, and answers questions about any public GitHub repository. This is configured live in the portal (it targets an external server, so there's nothing to deploy).
 
-> The external MCP server must conform to MCP version `2025-06-18` or later — the Learn MCP server does.
+> The external MCP server must conform to MCP version `2025-06-18` or later — the DeepWiki MCP server does.
 
 ### 1. Create the passthrough MCP server
 
 1. APIM → **APIs → MCP servers → + Create MCP server**.
 2. Select **Expose an existing MCP server**.
 3. **Backend MCP server:**
-   - **MCP server base URL:** `https://learn.microsoft.com/api/mcp`
+   - **MCP server base URL:** `https://mcp.deepwiki.com/mcp`
    - **Transport type:** **Streamable HTTP** (default).
 4. **New MCP server:**
-   - **Name:** `learn-mcp`
-   - **Base path:** `learn` (this becomes the route prefix).
-5. **Create.** APIM imports the remote server's tools (e.g. `microsoft_docs_search`) and lists it with a **Server URL** like `https://<your-apim-name>.azure-api.net/learn-mcp/mcp`.
+   - **Name:** `deepwiki-mcp`
+   - **Base path:** `deepwiki` (this becomes the route prefix).
+5. **Create.** APIM imports the remote server's tools (e.g. `ask_question`, `read_wiki_structure`, `read_wiki_contents`) and lists it with a **Server URL** like `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp`.
 
 ### 2. Add a governance policy
 
@@ -172,11 +164,11 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
 ```xml
 <inbound>
     <base />
-    <rate-limit-by-key calls="5" renewal-period="30"
+    <rate-limit-by-key calls="2" renewal-period="300"
         counter-key="@(context.Request.IpAddress)"
         remaining-calls-variable-name="remainingCallsPerIP" />
-    <trace source="learn-mcp" severity="information">
-        <message>Learn MCP tool call</message>
+    <trace source="deepwiki-mcp" severity="information">
+        <message>DeepWiki MCP tool call</message>
         <metadata name="agent-id" value="@(context.Request.Headers.GetValueOrDefault("agent-id", "n/a"))" />
     </trace>
 </inbound>
@@ -184,9 +176,11 @@ The whole point of putting APIM in front is to apply gateway policies. In the MC
 
 > **Caution:** don't read `context.Response.Body` in MCP server policies — it forces response buffering and breaks the streaming MCP servers require.
 
+> **Why these numbers?** `rate-limit-by-key` enforcement is **approximate**, not an exact gate on call N+1. The gateway counts per worker and reconciles the shared counter on a short delay, so a burst can slip through roughly **2× the limit** before `429`s appear. Agent tool calls also arrive slowly (~20–40 s apart, since each call waits for the model's answer), so a short window lets earlier calls age out before the count accumulates. A low `calls` with a long `renewal-period` (300 s is the max) keeps the spaced-out calls counted together, so the limit trips reliably through normal chat — here, around the 3rd–4th call.
+
 ### 3. Test the passthrough
 
-Add `https://<your-apim-name>.azure-api.net/learn-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot a docs question that triggers `microsoft_docs_search`; the 6th call within 30 seconds from the same IP should be rate-limited by APIM.
+Add `https://<your-apim-name>.azure-api.net/deepwiki-mcp/mcp` as an HTTP MCP server in VS Code (same steps as Pattern 1, step 5). Ask Copilot several questions about a public GitHub repo (e.g. *"Using deepwiki, how does routing work in the `vercel/next.js` repo?"*) that trigger `ask_question`. With `calls=2` over a 5-minute window, the request that crosses the limit (around the 3rd–4th call from the same IP) is rejected by APIM and surfaces as a failed tool call in Copilot. In App Insights the blocked request shows up as a failed request rather than a `200`.
 
 ---
 
@@ -256,7 +250,7 @@ A2A responses are JSON-RPC (not OpenAI-shaped), so `llm-emit-token-metric` doesn
   ```xml
   <inbound>
       <base />
-      <rate-limit-by-key calls="10" renewal-period="60"
+      <rate-limit-by-key calls="2" renewal-period="300"
           counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)"
           remaining-calls-variable-name="remaining" />
       <trace source="summarizer-agent" severity="information">
@@ -264,6 +258,8 @@ A2A responses are JSON-RPC (not OpenAI-shaped), so `llm-emit-token-metric` doesn
       </trace>
   </inbound>
   ```
+
+  > **Note:** `rate-limit-by-key` enforcement is approximate and A2A calls are slow (each `message/send` waits on the model), so — as with Pattern 2 — a low `calls` with a long `renewal-period` (300 s max) is needed to trip the limit reliably. With `calls=2` the block lands around the 3rd–4th call. To trip a higher limit instead, fire the test calls in parallel (a `for … & wait` curl burst) so they land inside the window before the shared counter reconciles.
 
 ### 5. Test through APIM
 
